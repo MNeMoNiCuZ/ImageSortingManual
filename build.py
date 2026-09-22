@@ -16,9 +16,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 SRC = ROOT / "src"
-WEB = SRC / "imagesorter" / "web"
+WEB = SRC / "trimage" / "web"
 ASSETS = SRC / "assets"
-ICON = ASSETS / "image_sorting_tool.ico"
+ICON = ASSETS / "trimage.ico"
 
 
 def main() -> int:
@@ -36,9 +36,9 @@ def main() -> int:
         "pyinstaller",
         "--noconfirm",
         "--clean",
-        "--name", "ImageSortingTool",
+        "--name", "Trimage",
         "--paths", str(SRC),
-        "--add-data", f"{WEB}{separator}imagesorter/web",
+        "--add-data", f"{WEB}{separator}trimage/web",
         "--add-data", f"{ASSETS}{separator}assets",
         "--icon", str(ICON),
         "--collect-submodules", "uvicorn",

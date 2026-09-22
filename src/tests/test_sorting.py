@@ -7,12 +7,15 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from imagesorter.config import AppConfig
-from imagesorter.models import Category, suggest_hotkeys
-from imagesorter.scanner import (count_images, duplicate_stems, newest_image,
+from trimage.config import AppConfig
+from trimage.models import DEFAULT_CATEGORIES, Category, suggest_hotkeys
+from trimage.scanner import (count_images, duplicate_stems, newest_image,
                                  scan_folder, sidecar_files)
-from imagesorter.session import Session
-from imagesorter.sorter import PENDING, SKIPPED, SORTED, SortQueue, unique_destination
+from trimage.session import Session
+from trimage.sorter import PENDING, SKIPPED, SORTED, SortQueue, unique_destination
+
+
+DEFAULT_NAMES = [c["name"] for c in DEFAULT_CATEGORIES]
 
 
 def make_image(path: Path, size=(24, 16)) -> Path:
@@ -44,6 +47,9 @@ def config(tmp_path: Path) -> AppConfig:
 @pytest.fixture
 def session(library: Path, config: AppConfig) -> Session:
     instance = Session(config)
+    # Start from nothing: the default categories have their own tests, and
+    # every other test here sets up the categories it needs.
+    instance.project.categories = []
     instance.set_folder(str(library))
     return instance
 
@@ -275,7 +281,7 @@ def test_api_undo_a_skip(client):
 
 
 def test_skipped_previews_carry_their_queue_index(client):
-    from imagesorter.session import SKIPPED_ID
+    from trimage.session import SKIPPED_ID
 
     client.post("/api/skip")
     data = client.get(f"/api/categories/{SKIPPED_ID}/previews").json()["previews"]
@@ -293,7 +299,7 @@ def test_skipped_images_newest_first(library: Path):
 
 
 def test_skipped_previews(session: Session):
-    from imagesorter.session import SKIPPED_ID
+    from trimage.session import SKIPPED_ID
 
     assert session.category_previews(SKIPPED_ID) == []
     session.skip()
@@ -304,7 +310,7 @@ def test_skipped_previews(session: Session):
 
 
 def test_api_skipped_previews(client):
-    from imagesorter.session import SKIPPED_ID
+    from trimage.session import SKIPPED_ID
 
     client.post("/api/skip")
     data = client.get(f"/api/categories/{SKIPPED_ID}/previews").json()["previews"]
@@ -558,7 +564,7 @@ def test_a_dropped_set_is_remembered_and_offered_back(library: Path, tmp_path: P
     second.resume()
     assert second.state()["total"] == 2
     assert second.state()["project"]["folders"] == 2
-    assert [c.name for c in second.project.categories] == ["Keep"]
+    assert [c.name for c in second.project.categories] == DEFAULT_NAMES + ["Keep"]
 
 
 def test_resuming_a_dropped_set_that_is_gone(library: Path, tmp_path: Path,
@@ -607,12 +613,12 @@ def test_a_fresh_session_is_offered_last_time(library: Path, tmp_path: Path,
     second = Session(AppConfig.load(tmp_path / "config.json"))
     offer = second.state()["resume"]
     assert offer["available"] is True
-    assert offer["categories"] == 1
+    assert offer["categories"] == len(DEFAULT_NAMES) + 1
     assert offer["source_folder"] == str(library)
 
     second.resume()
-    assert [c.name for c in second.project.categories] == ["Keep"]
-    assert second.project.categories[0].hotkey == "K"
+    assert [c.name for c in second.project.categories] == DEFAULT_NAMES + ["Keep"]
+    assert second.project.categories[-1].hotkey == "K"
     assert second.state()["total"] == 3
     assert second.state()["resume"]["available"] is False
 
@@ -632,7 +638,7 @@ def test_dismissing_the_offer(library: Path, tmp_path: Path, config: AppConfig):
     second = Session(AppConfig.load(tmp_path / "config.json"))
     second.dismiss_resume()
     assert second.state()["resume"]["available"] is False
-    assert second.project.categories == []
+    assert [c.name for c in second.project.categories] == DEFAULT_NAMES
 
 
 def test_resuming_a_folder_that_is_gone(tmp_path: Path, config: AppConfig):
@@ -658,7 +664,7 @@ def test_nothing_to_resume(config: AppConfig):
 def test_api_resume(client, library: Path, tmp_path: Path, config: AppConfig):
     client.post("/api/categories", json={"name": "Keep", "folder": str(tmp_path / "keep")})
 
-    from imagesorter import server
+    from trimage import server
     server.session = Session(AppConfig.load(tmp_path / "config.json"))
 
     state = client.get("/api/state").json()
@@ -672,7 +678,7 @@ def test_api_resume(client, library: Path, tmp_path: Path, config: AppConfig):
     server.session = Session(AppConfig.load(tmp_path / "config.json"))
     state = client.post("/api/resume/dismiss").json()
     assert state["resume"]["available"] is False
-    assert state["categories"] == []
+    assert [c["name"] for c in state["categories"]] == DEFAULT_NAMES
 
 
 # -- presets --------------------------------------------------------------
@@ -762,9 +768,10 @@ def test_legacy_project_format(tmp_path: Path, library: Path, config: AppConfig)
 def client(library: Path, config: AppConfig):
     from fastapi.testclient import TestClient
 
-    from imagesorter import server
+    from trimage import server
 
     server.session = Session(config)
+    server.session.project.categories = []
     with TestClient(server.create_app()) as test_client:
         test_client.post("/api/folder", json={"path": str(library)})
         yield test_client
@@ -979,7 +986,7 @@ def test_api_resolve_dropped_folder(client, library: Path):
 
 
 def test_resolve_dropped_files(library: Path):
-    from imagesorter.droppedfolder import resolve_files
+    from trimage.droppedfolder import resolve_files
 
     paths, missing = resolve_files(["cat.png", "cat2.png"], [str(library)])
     assert sorted(Path(p).name for p in paths) == ["cat.png", "cat2.png"]
@@ -1168,6 +1175,55 @@ def test_clear_input_then_load_again(session: Session, library: Path):
     session.clear_input()
     session.set_folder(str(library))
     assert session.state()["total"] == 3
+
+
+def test_a_new_session_starts_with_keep_maybe_discard(config: AppConfig):
+    fresh = Session(config)
+    assert [(c.name, c.folder, c.hotkey) for c in fresh.project.categories] == [
+        ("Keep", "Keep", "A"), ("Maybe", "Maybe", "S"), ("Discard", "Discard", "D")
+    ]
+    assert len({c.color for c in fresh.project.categories}) == 3
+    assert fresh.state()["resume"]["available"] is False    # defaults are not "setup"
+
+
+def test_the_default_categories_sort_like_any_other(config: AppConfig, library: Path,
+                                                    tmp_path: Path):
+    fresh = Session(config)
+    fresh.config.output_root = str(tmp_path / "out")
+    fresh.set_folder(str(library))
+    keep = fresh.project.categories[0]
+
+    fresh.sort_current(keep.id)
+    assert (tmp_path / "out" / "Keep" / "cat.png").exists()
+
+
+def test_clear_input_forgets_the_saved_session(session: Session, library: Path):
+    """The cleared images must not come back as the next run's resume offer."""
+    assert session.config.last_session
+
+    session.clear_input()
+
+    assert session.config.last_session == {}
+    assert not session.resume_offer()["available"]
+
+
+def test_new_input_gets_a_new_revision(session: Session, library: Path, tmp_path: Path):
+    """Counts repeat, so the cards key their cached thumbnails on this instead."""
+    session.skip()
+    first = session.state()
+    session.clear_input()
+
+    other = tmp_path / "other"
+    make_image(other / "one.png")
+    make_image(other / "two.png")
+    make_image(other / "three.png")
+    session.set_folder(str(other))
+    session.skip()
+    second = session.state()
+
+    assert second["skipped"] == first["skipped"]        # the same numbers...
+    assert second["total"] == first["total"]
+    assert second["revision"] != first["revision"]      # ...but a different input
 
 
 def test_api_add_images_and_clear_input(client, library: Path, tmp_path: Path):

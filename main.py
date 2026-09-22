@@ -1,4 +1,4 @@
-"""Image Sorting Tool - launcher.
+"""Trimage.
 
     py main.py                  native desktop window (falls back to browser)
     py main.py --web            serve and open the default browser
@@ -18,12 +18,12 @@ SRC = Path(__file__).resolve().parent / "src"
 if SRC.is_dir():
     sys.path.insert(0, str(SRC))
 
-from imagesorter import __version__, nativedialog
-from imagesorter.server import app, session
+from trimage import __version__, nativedialog
+from trimage.server import app, session
 
-APP_ID = "ImageSortingTool.ImageSortingTool"
+APP_ID = "Trimage.Trimage"
 ROOT = Path(getattr(sys, "_MEIPASS", SRC))
-ICON_PATH = ROOT / "assets" / "image_sorting_tool.ico"
+ICON_PATH = ROOT / "assets" / "trimage.ico"
 
 
 def configure_windows_identity() -> None:
@@ -81,7 +81,7 @@ def run_desktop(host: str, port: int) -> bool:
     serve(host, port, blocking=False)
     wait_until_up(host, port)
     window = webview.create_window(
-        f"Image Sorting Tool {__version__}",
+        "Trimage",
         f"http://127.0.0.1:{port}/",
         width=1440,
         height=900,
@@ -95,7 +95,7 @@ def run_desktop(host: str, port: int) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     configure_windows_identity()
-    parser = argparse.ArgumentParser(description="Image Sorting Tool")
+    parser = argparse.ArgumentParser(description="Trimage")
     parser.add_argument("project", nargs="?", help="a .json project file to open")
     parser.add_argument("--web", action="store_true", help="open in the default browser")
     parser.add_argument("--server", action="store_true", help="serve only, open nothing")
@@ -124,14 +124,14 @@ def main(argv: list[str] | None = None) -> int:
     url = f"http://{'127.0.0.1' if args.host == '0.0.0.0' else args.host}:{port}/"
 
     if args.server:
-        print(f"Image Sorting Tool {__version__} serving on {url}")
+        print(f"Trimage serving on {url}")
         serve(args.host, port)
         return 0
 
     if args.web:
         serve(args.host, port, blocking=False)
         wait_until_up(args.host, port)
-        print(f"Image Sorting Tool {__version__} running at {url}")
+        print(f"Trimage running at {url}")
         webbrowser.open(url)
         try:
             threading.Event().wait()

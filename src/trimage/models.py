@@ -13,6 +13,14 @@ CATEGORY_COLORS = [
 ]
 
 
+# What a fresh start begins with: keep / maybe / discard on the home row.
+DEFAULT_CATEGORIES = [
+    {"name": "Keep", "folder": "Keep", "hotkey": "A", "color": "#3fb98a"},
+    {"name": "Maybe", "folder": "Maybe", "hotkey": "S", "color": "#e4a13c"},
+    {"name": "Discard", "folder": "Discard", "hotkey": "D", "color": "#e05a77"},
+]
+
+
 def _new_id() -> str:
     return uuid.uuid4().hex[:8]
 
@@ -85,6 +93,22 @@ class Project:
             "source_folder": self.source_folder,
             "categories": [c.to_dict() for c in self.categories],
         }
+
+    @property
+    def is_pristine(self) -> bool:
+        """True while nothing has been set up: the starting three, or none."""
+        if not self.categories:
+            return True
+        return [
+            (c.name, c.folder, c.hotkey, c.color) for c in self.categories
+        ] == [
+            (d["name"], d["folder"], d["hotkey"], d["color"]) for d in DEFAULT_CATEGORIES
+        ]
+
+    @classmethod
+    def with_defaults(cls) -> "Project":
+        """A new project starts with Keep / Maybe / Discard, ready to use."""
+        return cls(categories=[Category.from_dict(c) for c in DEFAULT_CATEGORIES])
 
     def next_color(self) -> str:
         return CATEGORY_COLORS[len(self.categories) % len(CATEGORY_COLORS)]

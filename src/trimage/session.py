@@ -59,7 +59,7 @@ class Session:
 
     def __init__(self, config: AppConfig | None = None) -> None:
         self.config = config if config is not None else AppConfig.load()
-        self.project = Project()
+        self.project = Project.with_defaults()
         self.queue = SortQueue()
         self.project_path: Path | None = None
         self.warnings: list[str] = []
@@ -106,7 +106,7 @@ class Session:
         """Keep a copy of the current setup so the next run can offer it back."""
         if not self.config.autosave:
             return
-        if not self.project.categories and not self.project.source_folder                 and not self.image_list:
+        if self.untouched:
             return
         self.config.last_session = {
             "source_folder": self.project.source_folder,
@@ -120,7 +120,7 @@ class Session:
     @property
     def untouched(self) -> bool:
         """Nothing has been set up in this run yet."""
-        return (not self.project.categories and not self.project.source_folder
+        return (self.project.is_pristine and not self.project.source_folder
                 and not self.image_list)
 
     def resume_offer(self) -> dict[str, Any]:
@@ -294,6 +294,12 @@ class Session:
         self.folders.invalidate()
         self.status = ("Cleared the input. Your categories are still here."
                        if had else "There was nothing loaded.")
+        if self.untouched:
+            # Nothing is left to remember, and `autosave` will not overwrite a
+            # saved session with an empty one - so drop it here, or the images
+            # that were just cleared come back as next run's resume offer.
+            self.config.last_session = {}
+            self.save_config()
         self.autosave()
         return had
 
@@ -708,6 +714,7 @@ class Session:
             "presets": sorted(self.config.presets),
             "resume": self.resume_offer(),
             "total": total,
+            "revision": self.queue.revision,
             "index": self.queue.index,
             "selection": self.queue.selection,
             "target": self.queue.target,

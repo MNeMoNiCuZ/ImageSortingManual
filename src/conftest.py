@@ -1,4 +1,4 @@
-"""Put `src` on sys.path so the tests import `imagesorter` from the source tree."""
+"""Put `src` on sys.path so the tests import `trimage` from the source tree."""
 import sys
 from pathlib import Path
 

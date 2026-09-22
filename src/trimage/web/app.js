@@ -190,7 +190,7 @@ function renderFilmstrip() {
       state.selection !== null && item.index === state.selection);
     const img = el("img");
     img.loading = "lazy";
-    img.src = `/api/thumb/${item.index}?size=260&v=${state.index}`;
+    img.src = `/api/thumb/${item.index}?size=260&v=${state.revision}-${state.index}`;
     img.alt = item.name;
     img.draggable = false;
     const label = el("div", "label");
@@ -383,7 +383,7 @@ function buildCategoryCard(category) {
   const card = el("button", "card");
   card.style.setProperty("--cat-color", category.color);
   card.dataset.id = category.id;
-  card.dataset.version = `${category.in_folder}-${category.staged_here}`;
+  card.dataset.version = `${state.revision}-${category.in_folder}-${category.staged_here}`;
   card.classList.toggle("has-waiting", category.staged_here > 0);
 
   const waiting = category.staged_here;
@@ -451,7 +451,7 @@ function buildCategoryCard(category) {
 function buildSkippedCard() {
   const card = el("button", "card skipped");
   card.dataset.id = SKIPPED_ID;
-  card.dataset.version = String(state.skipped);
+  card.dataset.version = `${state.revision}-${state.skipped}`;
   card.title = "The images you passed over. Click to put them all back in the queue, "
              + "or drag an image here to skip it. No files are touched.";
 

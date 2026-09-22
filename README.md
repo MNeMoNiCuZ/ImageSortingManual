@@ -1,4 +1,4 @@
-# Image Sorting Tool
+# Trimage
 
 Manually sort large image folders by hand, fast.
 
@@ -10,7 +10,7 @@ captioned image sets.
 
 It runs as a desktop window, in your browser, or as a server you host.
 
-![image](https://github.com/MNeMoNiCuZ/ImageSorting/assets/60541708/2a834a38-05ba-493c-b885-9f72905bae04)
+![image](https://github.com/MNeMoNiCuZ/Trimage/assets/60541708/2a834a38-05ba-493c-b885-9f72905bae04)
 
 | | command |
 |---|---|
@@ -22,8 +22,8 @@ It runs as a desktop window, in your browser, or as a server you host.
 ## Install
 
 ```
-git clone https://github.com/MNeMoNiCuZ/ImageSorting
-cd ImageSorting
+git clone https://github.com/MNeMoNiCuZ/Trimage
+cd Trimage
 py -m pip install -r requirements.txt
 py main.py
 ```
@@ -57,7 +57,7 @@ On Windows, `venv_create.bat` creates a `venv` and installs `requirements.txt` i
 ## Building an executable
 
 ```
-py build.py              # src/dist/ImageSortingTool/
+py build.py              # src/dist/Trimage/
 py build.py --onefile    # single .exe
 build.bat                # --onefile, then copies the .exe to the project root
 ```

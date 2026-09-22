@@ -65,6 +65,10 @@ class SortQueue:
         self.index: int = 0
         self.selection: int | None = None   # a look-ahead pick, see `target`
         self.history: list[MoveRecord] = []
+        # Bumped whenever the set of images changes. Counts alone repeat - a
+        # new input can land on the same numbers as the last one - so the UI
+        # needs this to tell one input from another when it caches thumbnails.
+        self.revision: int = 0
 
     # -- loading ---------------------------------------------------------
     def load(self, folder: str | Path, recursive: bool = True,
@@ -73,6 +77,7 @@ class SortQueue:
         self.index = 0
         self.selection = None
         self.history.clear()
+        self.revision += 1
         return len(self.items)
 
     def load_paths(self, paths: list[str | Path]) -> int:
@@ -81,6 +86,7 @@ class SortQueue:
         self.index = 0
         self.selection = None
         self.history.clear()
+        self.revision += 1
         return len(self.items)
 
     def append_paths(self, paths: list[str | Path]) -> int:
@@ -92,6 +98,7 @@ class SortQueue:
             # The queue had run out; carry on with the new ones.
             self.index = self._next_pending(min(self.index, before))
             self.selection = None
+        self.revision += 1
         return len(self.items) - before
 
     def clear(self) -> None:
@@ -99,6 +106,7 @@ class SortQueue:
         self.index = 0
         self.selection = None
         self.history.clear()
+        self.revision += 1
 
     @property
     def images(self) -> list[Path]:

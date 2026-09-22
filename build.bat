@@ -11,7 +11,7 @@ if exist "venv\Scripts\python.exe" (
 %BUILD_PYTHON% build.py --onefile
 if errorlevel 1 exit /b %errorlevel%
 
-copy /Y "src\dist\ImageSortingTool.exe" "ImageSortingTool.exe" >nul
+copy /Y "src\dist\Trimage.exe" "Trimage.exe" >nul
 if errorlevel 1 exit /b %errorlevel%
 
-echo Built ImageSortingTool.exe
+echo Built Trimage.exe

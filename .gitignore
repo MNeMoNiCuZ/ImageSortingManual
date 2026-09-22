@@ -172,5 +172,5 @@ src/dist/
 config.json
 
 # Built executable and local venv helper
-ImageSortingTool.exe
+Trimage.exe
 venv_activate.bat

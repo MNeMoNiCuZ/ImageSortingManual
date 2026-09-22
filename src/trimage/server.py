@@ -106,7 +106,7 @@ class SettingsBody(BaseModel):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Image Sorting Tool", version=__version__)
+    app = FastAPI(title="Trimage", version=__version__)
 
     def ok() -> JSONResponse:
         return JSONResponse(session.state())

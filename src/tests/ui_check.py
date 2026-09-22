@@ -79,8 +79,8 @@ def start_server(source_folder):
     """Run the app in-process on a free port, with a throwaway config."""
     import uvicorn
 
-    from imagesorter.config import AppConfig
-    from imagesorter import server as server_module
+    from trimage.config import AppConfig
+    from trimage import server as server_module
 
     config = AppConfig()
     config._file = SP / "config.json"
@@ -114,7 +114,7 @@ def start_server(source_folder):
 def restart_app():
     """Stand in for quitting and starting the app again: a brand new session
     reading the config back off disk."""
-    from imagesorter.config import AppConfig as _Config
+    from trimage.config import AppConfig as _Config
     module = globals()["_server_module"]
     module.session = module.Session(_Config.load(globals()["_config_file"]))
 
