@@ -1,46 +1,63 @@
-# Introduction
-The purpose of this tool is to help you quickly sort through files / datasets where an image may have multiple additional files sharing the same name (such as .txt or .caption or more).
+# Image Sorting Tool
 
-The tool shows you an image, and you press a configured button or hotkey to move the image and all the supplementary files into a target output folder.
+Manually sort large image folders by hand, fast.
 
-It's useful for categorizing and sorting files quickly and effortlessly.
+Point it at a folder, define your categories, and it shows you the images one at a time.
+Press a category's hotkey and the image is moved or copied into that category's folder,
+together with any sidecar files sharing its name (`.txt`, `.caption`, `.json`, ...), and
+the next image comes up. Built for triaging datasets, culling renders and splitting
+captioned image sets.
+
+It runs as a desktop window, in your browser, or as a server you host.
 
 ![image](https://github.com/MNeMoNiCuZ/ImageSorting/assets/60541708/2a834a38-05ba-493c-b885-9f72905bae04)
 
-https://github.com/MNeMoNiCuZ/ImageSorting/assets/60541708/d4863089-e24e-45c3-ae55-3b0e47f11b74
+| | command |
+|---|---|
+| Native desktop window | `py main.py` |
+| In your browser | `py main.py --web` |
+| Hosted / headless server | `py main.py --server --host 0.0.0.0` |
+| Open a saved project | `py main.py myproject.json` |
 
-# Requirements
-Developed on Python 3.12.
+## Install
 
-`tkinter`
+```
+git clone https://github.com/MNeMoNiCuZ/ImageSorting
+cd ImageSorting
+py -m pip install -r requirements.txt
+py main.py
+```
 
-`PIL` / `pillow`
+Python 3.11+.
 
-# Installation
-`git clone https://github.com/MNeMoNiCuZ/ImageSorting`
-`pip install pillow`
+On Windows, `venv_create.bat` creates a `venv` and installs `requirements.txt` into it.
+`build.bat` uses that `venv` when it exists.
 
-# Usage Instructions
-- Double-click to launch `main.py` or run `py main.py` from CLI
-- Go to the `Setup` menu and pick: `Select Image Folder` from the menu
-- Browse to where you have your images
-  - It will automatically include images in subfolders recursively
-- Go to the `Setup` menu and pick: `Add Category` from the menu
-  - Choose a name for your button/category
-  - Browse to where you want to move files matching this category
-  - Optional: Add a single-button hotkey (letters and numbers) to this action
-- Repeat until you have all categories you need
-- Go to the `File` menu and pick: `Save Project As` from the menu to save your project
-> [!IMPORTANT]
-> Restart the program after adding or editing your categories. There's a bug where the hotkeys don't load until you restart.
+## Usage
 
-- Click buttons, sort images, profit!
+1. Load images: **Image folder...**, or drop a folder or images onto the window.
+2. Set an **output root**, paste your category names into *Quick add*, one per line, then
+   **Save categories**.
+3. Press a category hotkey, or click a card.
 
+## Hotkeys
 
-# Known Issues
-- [ ]   There is no undo functionality.
-- [ ]   Does not actively rescale GUI. Only refreshes when you sort an image.
-- [ ]   The hotkey for newly added or edited categories does not work until you restart.
-- [ ]   Support hotkeys better, including special keys.
-- [ ]   Capitalize hotkeys in UI.
-- [ ]   Make buttons activate when you use a hotkey.
+| Key | Action |
+|---|---|
+| your category hotkeys | move the current image into that category |
+| `Ctrl`+`X` | skip |
+| `Ctrl`+`Z` / `←` / `Backspace` | undo |
+| `Ctrl`+`S` | save project |
+| `Ctrl`+`O` | choose image folder |
+| `Ctrl`+`E` | edit categories |
+| `Ctrl`+`Enter` | apply pending changes |
+| `?` | shortcut list |
+| `Esc` | close a dialog |
+
+## Building an executable
+
+```
+py build.py              # src/dist/ImageSortingTool/
+py build.py --onefile    # single .exe
+build.bat                # --onefile, then copies the .exe to the project root
+```

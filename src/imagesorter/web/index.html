@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image Sorting Tool</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>&#128194;</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+
+  <div class="topbar-left">
+    <button id="btn-manage" class="btn ctrl primary" title="Add, edit and reorder your categories (Ctrl+E)">
+      <span class="ctrl-glyph">☰</span><span>Categories</span>
+    </button>
+  </div>
+
+  <div class="dock-controls" id="dock-controls">
+    <button id="btn-skip" class="btn ctrl"
+            title="Leave this image undecided and move on. It goes into the Skipped group so you can come back to it.">
+      <span>Skip</span><span class="ctrl-glyph">▶</span>
+    </button>
+    <button id="btn-undo" class="btn ctrl warn" disabled
+            title="Take back the last thing you did — a move, a copy or a skip (Ctrl+Z). Files that were moved are moved back.">
+      <span class="ctrl-glyph">↶</span><span>Undo</span>
+    </button>
+    <button id="btn-discard" class="btn ctrl danger" hidden>
+      <span class="ctrl-glyph">✕</span><span>Cancel</span>
+    </button>
+    <button id="btn-apply" class="btn ctrl apply" hidden>
+      <span class="ctrl-glyph">▣</span><span>Apply</span>
+    </button>
+  </div>
+
+  <div class="topbar-right">
+    <button id="btn-folder" class="btn path" title="Choose the folder of images to sort">
+      <svg class="path-glyph" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.4h7A1.5 1.5 0 0 1 19 9.9v7.6a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 17.5Z"/>
+      </svg>
+      <span id="folder-label">Image folder…</span>
+    </button>
+    <button id="btn-menu" class="btn icon" title="Menu" aria-label="Menu">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7h16M4 12h16M4 17h16"/>
+      </svg>
+    </button>
+  </div>
+
+</header>
+
+<main class="app" id="layout">
+
+  <aside class="filmstrip" id="filmstrip" aria-label="Upcoming images"></aside>
+  <div class="resizer-v" id="resize-strip" title="Drag to resize the strip"
+       role="separator" aria-orientation="vertical" tabindex="0"></div>
+
+  <section class="stage">
+    <div class="viewer" id="viewer">
+      <img id="main-image" alt="" hidden>
+      <div class="empty" id="empty-state">
+        <h1>Nothing loaded</h1>
+        <p>Choose an image folder to start sorting.</p>
+        <button class="btn primary" id="btn-folder-empty">Choose image folder…</button>
+        <div class="dropzone" id="dropzone">
+          <span class="dropzone-glyph">⬇</span>
+          <span>…or drop a folder, or a handful of images, here</span>
+        </div>
+      </div>
+    </div>
+    <div class="infobar">
+      <div class="info-left">
+        <span id="info-name" class="info-name">—</span>
+        <span id="info-sidecars" class="chips"></span>
+      </div>
+      <div class="info-right">
+        <span id="info-dims"></span>
+        <span id="info-size"></span>
+        <span id="info-counts" class="counts"></span>
+        <span id="info-progress" class="progress-text"></span>
+      </div>
+    </div>
+    <div class="progressbar"><div id="progress-fill"></div></div>
+  </section>
+
+  <section class="bottom" id="bottom">
+    <div class="resizer-h" id="resize-dock" title="Drag to resize the category area"
+         role="separator" aria-orientation="horizontal" tabindex="0"></div>
+    <footer class="dock">
+      <div class="categories" id="categories"></div>
+    </footer>
+  </section>
+
+</main>
+
+<div class="statusbar">
+  <span id="status">Ready.</span>
+  <span id="control-note" class="control-note"></span>
+  <span id="warnings" class="warning"></span>
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+<div class="modal-backdrop" id="modal-backdrop" hidden>
+
+  <div class="modal browse" id="modal-browse" hidden>
+    <h2 id="browse-title">Select folder</h2>
+    <div class="path-row">
+      <button class="btn ghost" id="browse-up" title="Go to the parent folder">↑ Up</button>
+      <input type="text" id="browse-path" class="path-input" spellcheck="false"
+             placeholder="Type or paste a folder path">
+      <button class="btn ghost" id="browse-go">Go</button>
+    </div>
+    <div class="drives" id="browse-drives"></div>
+    <ul class="filelist" id="browse-list"></ul>
+    <div class="browse-note" id="browse-note"></div>
+    <div class="modal-actions">
+      <button class="btn ghost small" id="browse-newfolder">New folder</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary" id="browse-confirm">Select</button>
+    </div>
+  </div>
+
+  <!-- ------------------------------------------------- category table -->
+  <div class="modal wide" id="modal-categories" hidden>
+    <h2>Categories</h2>
+
+    <div class="preset-bar">
+      <label class="inline-label">Preset
+        <select id="preset-select"><option value="">—</option></select>
+      </label>
+      <button class="btn ghost small" id="preset-load">Load</button>
+      <button class="btn ghost small" id="preset-append">Append</button>
+      <button class="btn ghost small" id="preset-save">Save as…</button>
+      <button class="btn danger small" id="preset-delete">Delete</button>
+    </div>
+
+    <div class="root-bar">
+      <label class="inline-label grow">Output root
+        <input type="text" id="table-root" spellcheck="false"
+               placeholder="Set this and categories can use plain folder names">
+      </label>
+      <button class="btn ghost small" id="table-root-browse">Browse…</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="cat-table">
+        <thead>
+          <tr>
+            <th class="col-drag"></th>
+            <th class="col-color">Colour</th>
+            <th>Name</th>
+            <th>Folder</th>
+            <th class="col-hotkey">Hotkey</th>
+            <th class="col-count">Files</th>
+            <th class="col-del"></th>
+          </tr>
+        </thead>
+        <tbody id="cat-rows"></tbody>
+      </table>
+    </div>
+
+    <div class="add-row-bar">
+      <button class="btn ghost small" id="cat-add-row">+ Row</button>
+    </div>
+
+    <div class="bulk">
+      <label class="grow">Quick add — one category name per line
+        <textarea id="bulk-names" rows="3" spellcheck="false"
+                  placeholder="keep&#10;maybe&#10;discard"></textarea>
+      </label>
+      <div class="bulk-action">
+        <button class="btn ghost small" id="bulk-add">Add these</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn ghost small" id="cat-make-folders">Create folders now</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary" id="cat-table-save">Save categories</button>
+    </div>
+  </div>
+
+  <!-- ------------------------------------------------------- settings -->
+  <div class="modal" id="modal-settings" hidden>
+    <h2>Settings</h2>
+
+    <h3>Folders</h3>
+    <label>Output root — categories with a plain folder name are created in here
+      <span class="inline">
+        <input type="text" id="set-output-root" spellcheck="false" placeholder="D:\sorted">
+        <button class="btn ghost small" id="set-root-browse">Browse…</button>
+      </span>
+    </label>
+
+    <h3>Scanning</h3>
+    <label class="check"><input type="checkbox" id="set-recursive"> Include images in sub-folders</label>
+    <label>Order images by
+      <select id="set-sort-order"></select>
+    </label>
+
+    <h3>Sorting</h3>
+    <label>What to do with the files
+      <select id="set-file-action"></select>
+    </label>
+    <label>When to do it
+      <select id="set-apply-mode"></select>
+    </label>
+    <p class="hint" id="apply-mode-hint"></p>
+    <label>Skip hotkey
+      <span class="inline">
+        <input type="text" class="hotkey-input" id="set-skip-hotkey" readonly placeholder="click, press a key">
+        <button class="btn ghost small" id="set-skip-hotkey-clear">Clear</button>
+      </span>
+    </label>
+    <label class="check"><input type="checkbox" id="set-sidecars"> Take sidecar files along (.txt, .caption, …)</label>
+    <label>Only these sidecar extensions — blank means all
+      <input type="text" id="set-sidecar-ext" spellcheck="false" placeholder="txt, caption, json">
+    </label>
+
+    <h3>View</h3>
+    <label class="check"><input type="checkbox" id="set-filmstrip"> Show the upcoming-images strip</label>
+    <label class="check"><input type="checkbox" id="set-full-strip"> Run the strip down the full height of the window</label>
+    <label>Thumbnail shape
+      <select id="set-thumb-ratio"></select>
+    </label>
+    <label>Category cards
+      <select id="set-card-layout"></select>
+    </label>
+    <label class="check"><input type="checkbox" id="set-card-thumbs"> Show image previews on the category cards</label>
+    <label>Preview size on cards <span class="value" id="set-card-thumb-size-value"></span>
+      <input type="range" id="set-card-thumb-size" min="32" max="140" step="4">
+    </label>
+    <label class="check"><input type="checkbox" id="set-card-counts"> Show the image count on each category card</label>
+    <p class="hint">Drag the edge of the strip or of the category area to resize them.</p>
+    <label>Image sizing
+      <select id="set-image-fit"></select>
+    </label>
+
+    <h3>Startup</h3>
+    <label class="check"><input type="checkbox" id="set-autosave"> Save my categories as I go, and offer them next time</label>
+    <label class="check"><input type="checkbox" id="set-remember"> Remember the last project</label>
+
+    <p class="hint">Saved automatically to <code id="set-config-path"></code></p>
+
+    <div class="modal-actions">
+      <button class="btn ghost small" id="set-rescan">Rescan folder</button>
+      <span class="spacer"></span>
+      <button class="btn primary" data-close>Done</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-help" hidden>
+    <h2>Keyboard shortcuts</h2>
+    <table class="keys">
+      <tr><td><span id="help-skip-hotkey"></span></td><td><b>Skip</b> — leave this image undecided and move on. It joins the <b>Skipped</b> group so you can come back to it later.</td></tr>
+      <tr><td><kbd>←</kbd> / <kbd>Backspace</kbd></td><td><b>Prev</b> — go back to the last image you skipped or passed over and put it back in the queue. It is the quick way to undo a single <b>Skip</b>; the <b>Skipped</b> card puts them all back at once. Nothing on disk changes.</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td><b>Undo</b> — reverse the last <em>file move</em> and put the files back.</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Save project</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Choose image folder</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Edit categories</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Apply the waiting changes (deferred mode)</td></tr>
+      <tr><td><kbd>?</kbd></td><td>This list</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close a dialog</td></tr>
+    </table>
+    <p class="hint">The <b>Skip</b> key is yours to set or clear in
+      <b>Settings → Sorting</b>.</p>
+    <p class="hint">Category hotkeys are whatever you assign — letters, digits, function keys, numpad keys and modifier combinations all work, and they take effect immediately.</p>
+    <div class="modal-actions"><span class="spacer"></span><button class="btn primary" data-close>Close</button></div>
+  </div>
+
+  <div class="modal narrow" id="modal-resume" hidden>
+    <h2>Carry on from last time?</h2>
+    <p class="resume-summary" id="resume-summary"></p>
+    <p class="hint">Your categories and hotkeys are saved automatically. You can turn
+      that off in Settings.</p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button class="btn ghost" id="resume-no">Start fresh</button>
+      <button class="btn primary" id="resume-yes">Use it</button>
+    </div>
+  </div>
+
+  <div class="modal narrow" id="modal-prompt" hidden>
+    <h2 id="prompt-title">Name</h2>
+    <input type="text" id="prompt-input" spellcheck="false">
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button class="btn ghost" data-close>Cancel</button>
+      <button class="btn primary" id="prompt-ok">OK</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="context-menu" id="context-menu" hidden></div>
+
+<div class="drop-overlay" id="drop-overlay" hidden>
+  <div class="drop-overlay-inner">
+    <span class="dropzone-glyph">⬇</span>
+    <span id="drop-overlay-text">Drop a folder, or some images, to load them</span>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
