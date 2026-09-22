@@ -1,9 +1,5 @@
-<<<<<<< HEAD
 # Trimage
-=======
-# Image Sorting Tool
 The purpose of this tool is to help you quickly sort through files / datasets where an image may have multiple additional files sharing the same name (such as .txt, .json, .caption etc.).
->>>>>>> 65b7398098ecfa8da8af8e9d44ff06b07de2c216
 
 The tool shows you an image, and you press a configured button or hotkey to copy or move the image and all the supplementary files into a target output folder.
 
@@ -11,12 +7,10 @@ Built for triaging datasets, culling renders and splitting captioned image sets.
 
 It runs as a desktop window, in your browser, or as a server you host.
 
-<<<<<<< HEAD
-![image](https://github.com/MNeMoNiCuZ/Trimage/assets/60541708/2a834a38-05ba-493c-b885-9f72905bae04)
-=======
+<img width="2557" height="1380" alt="Screenshot" src="https://github.com/user-attachments/assets/3a8140bf-0f0d-4d4b-829a-dadc0215b32e" />
 
->>>>>>> 65b7398098ecfa8da8af8e9d44ff06b07de2c216
 
+## Commands
 | | command |
 |---|---|
 | Native desktop window | `py main.py` |
