@@ -1,16 +1,13 @@
 # Image Sorting Tool
+The purpose of this tool is to help you quickly sort through files / datasets where an image may have multiple additional files sharing the same name (such as .txt, .json, .caption etc.).
 
-Manually sort large image folders by hand, fast.
+The tool shows you an image, and you press a configured button or hotkey to copy or move the image and all the supplementary files into a target output folder.
 
-Point it at a folder, define your categories, and it shows you the images one at a time.
-Press a category's hotkey and the image is moved or copied into that category's folder,
-together with any sidecar files sharing its name (`.txt`, `.caption`, `.json`, ...), and
-the next image comes up. Built for triaging datasets, culling renders and splitting
-captioned image sets.
+Built for triaging datasets, culling renders and splitting captioned image sets.
 
 It runs as a desktop window, in your browser, or as a server you host.
 
-![image](https://github.com/MNeMoNiCuZ/ImageSorting/assets/60541708/2a834a38-05ba-493c-b885-9f72905bae04)
+
 
 | | command |
 |---|---|
