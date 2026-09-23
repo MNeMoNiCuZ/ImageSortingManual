@@ -1,6 +1,7 @@
 """Application state: settings, the loaded project and the live sorting queue."""
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -359,6 +360,29 @@ class Session:
         return self.project_path
 
     # -- categories -------------------------------------------------------
+    def sorting_setup(self) -> dict[str, Any]:
+        """Validate destinations before exposing sorting controls."""
+        if not self.project.categories:
+            return {"ready": False, "error": "Set up categories before sorting."}
+        try:
+            for category in self.project.categories:
+                folder = self._destination(category)
+                if not folder.is_absolute():
+                    raise ValueError("Choose an absolute output folder before sorting.")
+                ancestor = folder
+                while not ancestor.exists() and ancestor != ancestor.parent:
+                    ancestor = ancestor.parent
+                if not ancestor.is_dir() or not os.access(ancestor, os.W_OK):
+                    raise ValueError(f"Output folder is not writable: {folder}")
+        except (ValueError, OSError) as exc:
+            return {"ready": False, "error": str(exc)}
+        return {"ready": True, "error": ""}
+
+    def require_sorting_setup(self) -> None:
+        setup = self.sorting_setup()
+        if not setup["ready"]:
+            raise ValueError(setup["error"])
+
     def _destination(self, category: Category) -> Path:
         folder = category.resolve(self.config.output_root)
         if folder is None:
@@ -491,6 +515,7 @@ class Session:
 
     # -- actions ----------------------------------------------------------
     def sort_current(self, category_id: str) -> None:
+        self.require_sorting_setup()
         category = self.project.find(category_id)
         if category is None:
             raise KeyError(category_id)
@@ -518,6 +543,12 @@ class Session:
         self.status = f"{verb} {record.image_source.name}{suffix} to {category.name}."
 
     def apply_staged(self) -> tuple[int, list[str]]:
+        if any(self.project.find(item.category_id) is None for item in self.queue.staged_items):
+            return 0, ["A staged image points at a category that is gone."]
+        setup = self.sorting_setup()
+        if not setup["ready"]:
+            return 0, [setup["error"]]
+
         def destination_for(category_id: str) -> Path:
             category = self.project.find(category_id)
             if category is None:
@@ -582,6 +613,19 @@ class Session:
         self.status = (f"Cleared {category.name}: {', '.join(parts)}." if parts
                        else f"{category.name} was already empty.")
         return put_back, cancelled, extra
+
+    def clear_output(self) -> None:
+        """Clear every category using the same restoration rules as a single clear."""
+        warnings = []
+        try:
+            for category in self.project.categories:
+                self.warnings = []
+                self.clear_category(category.id)
+                warnings.extend(self.warnings)
+        finally:
+            self.folders.invalidate()
+            self.warnings = list(dict.fromkeys(warnings + self.warnings))
+        self.status = "Output cleared."
 
     def skip(self) -> None:
         self.status = "Skipped." if self.queue.skip() else "Nothing left to skip."
@@ -703,6 +747,7 @@ class Session:
         pending = self.queue.count(PENDING)
         return {
             "config": self.config.to_dict(),
+            "setup": self.sorting_setup(),
             "project": {
                 "source_folder": self.project.source_folder,
                 "source_label": self.source_label(),

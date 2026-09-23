@@ -210,6 +210,7 @@ def create_app() -> FastAPI:
     def sort(category_id: str, index: int = Query(-1)) -> JSONResponse:
         """Sort the current image, or the one at `index` (drag and drop)."""
         try:
+            session.require_sorting_setup()
             if index >= 0:
                 session.select(index)
             session.sort_current(category_id)
@@ -474,6 +475,14 @@ def create_app() -> FastAPI:
     @app.post("/api/input/clear")
     def clear_input() -> JSONResponse:
         session.clear_input()
+        return ok()
+
+    @app.post("/api/output/clear")
+    def clear_output() -> JSONResponse:
+        try:
+            session.clear_output()
+        except Exception as exc:
+            return fail(exc)
         return ok()
 
     @app.get("/api/env")

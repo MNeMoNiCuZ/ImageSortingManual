@@ -12,6 +12,118 @@ let env = { platform: "", home: "", sort_orders: [], image_fits: [],
 const ASPECTS = { vertical: 9 / 16, horizontal: 16 / 9, square: 1 };
 let imageToken = 0;
 
+/* =============================================== zoom / pan state */
+const zoomState = {
+  level: 1.0,
+  panX: 0,
+  panY: 0,
+};
+let baseImgW = 0;
+let baseImgH = 0;
+const ZOOM_MIN = 0.10;
+const ZOOM_MAX = 10.0;
+const ZOOM_STEP = 0.10;
+let zoomIsPanning = false;
+let zoomPanStart = { x: 0, y: 0 };
+
+function zoomReset() {
+  zoomState.level = 1.0;
+  zoomState.panX = 0;
+  zoomState.panY = 0;
+  applyZoom();
+}
+
+function zoomIn() {
+  changeZoom(1);
+}
+
+function zoomOut() {
+  changeZoom(-1);
+}
+
+function changeZoom(direction) {
+  const step = ZOOM_STEP * 100;
+  const percent = Math.round(zoomState.level * 100);
+  const tick = direction > 0 ? Math.floor(percent / step) + 1 : Math.ceil(percent / step) - 1;
+  zoomState.level = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, tick * step / 100));
+  applyZoom();
+}
+
+function zoomBaseSize(viewer) {
+  const style = getComputedStyle(viewer);
+  const width = viewer.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  const height = viewer.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+  if (viewer.classList.contains("fit-cover")) return { width, height };
+  const scale = Math.min(1, width / baseImgW, height / baseImgH);
+  return { width: baseImgW * scale, height: baseImgH * scale };
+}
+
+function applyZoom() {
+  requestAnimationFrame(() => {
+    if (!baseImgW || !baseImgH) return;
+    const img = $("main-image");
+    if (!img || img.hidden) return;
+    const viewer = $("viewer");
+    const vw = viewer.clientWidth;
+    const vh = viewer.clientHeight;
+    if (vw <= 0 || vh <= 0) return;
+    const z = zoomState.level;
+    const base = zoomBaseSize(viewer);
+    if (base.width <= 0 || base.height <= 0) return;
+    const imgW = base.width * z;
+    const imgH = base.height * z;
+    // Keep half the image visible on each axis, or half the viewer when zoomed larger.
+    const maxPanX = Math.max(imgW, vw) / 2;
+    const maxPanY = Math.max(imgH, vh) / 2;
+    zoomState.panX = Math.max(-maxPanX, Math.min(maxPanX, zoomState.panX));
+    zoomState.panY = Math.max(-maxPanY, Math.min(maxPanY, zoomState.panY));
+
+    if (z === 1.0 && zoomState.panX === 0 && zoomState.panY === 0) {
+      viewer.classList.remove("zoomed");
+      img.style.position = "";
+      img.style.left = "";
+      img.style.top = "";
+      img.style.transform = "";
+      img.style.transformOrigin = "";
+      img.style.maxWidth = "";
+      img.style.maxHeight = "";
+      img.style.width = "";
+      img.style.height = "";
+      img.style.objectFit = "";
+      img.style.cursor = "";
+      img.style.transition = "";
+      updateZoomUI();
+      return;
+    }
+
+    viewer.classList.add("zoomed");
+    img.style.maxWidth = "none";
+    img.style.maxHeight = "none";
+    img.style.width = `${base.width}px`;
+    img.style.height = `${base.height}px`;
+    img.style.position = "absolute";
+    img.style.left = "0";
+    img.style.top = "0";
+    img.style.transition = "none";
+    img.style.cursor = zoomIsPanning ? "grabbing" : "grab";
+
+    const tx = Math.round((vw - imgW) / 2 + zoomState.panX);
+    const ty = Math.round((vh - imgH) / 2 + zoomState.panY);
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${z})`;
+    img.style.transformOrigin = "0 0";
+
+    updateZoomUI();
+  });
+}
+
+function updateZoomUI() {
+  const pct = Math.round(zoomState.level * 100);
+  const levelEl = $("zoom-level");
+  if (levelEl) {
+    levelEl.textContent = pct + "%";
+  }
+}
+
 async function api(path, options) {
   const res = await fetch(path, options);
   let data = null;
@@ -34,13 +146,23 @@ const put = (path, body) => api(path, {
 });
 
 let toastTimer = null;
+function scheduleToastHide() {
+  clearTimeout(toastTimer);
+  const node = $("toast");
+  if (node.matches(":hover, :focus")) return;
+  toastTimer = setTimeout(() => { node.hidden = true; }, node.classList.contains("error") ? 5200 : 3000);
+}
+$("toast").addEventListener("pointerenter", () => clearTimeout(toastTimer));
+$("toast").addEventListener("pointerdown", () => clearTimeout(toastTimer));
+$("toast").addEventListener("focus", () => clearTimeout(toastTimer));
+$("toast").addEventListener("pointerleave", scheduleToastHide);
+$("toast").addEventListener("blur", scheduleToastHide);
 function toast(message, isError) {
   const node = $("toast");
   node.textContent = message;
   node.classList.toggle("error", !!isError);
   node.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { node.hidden = true; }, isError ? 5200 : 2200);
+  scheduleToastHide();
 }
 
 /* --------------------------------------------------------------- hotkeys */
@@ -98,8 +220,12 @@ function applyConfigToChrome() {
   $("layout").classList.toggle("no-strip", !config.show_filmstrip);
   $("layout").classList.toggle("full-strip", config.full_height_strip);
   const viewer = $("viewer");
+  const wasZoomed = viewer.classList.contains("zoomed");
   viewer.classList.toggle("fit-cover", config.image_fit === "cover");
   viewer.classList.toggle("fit-actual", config.image_fit === "actual");
+  if (config.image_fit === "actual" && wasZoomed) {
+    zoomReset();
+  }
 }
 
 function renderViewer() {
@@ -111,13 +237,24 @@ function renderViewer() {
     const token = ++imageToken;
     const url = `/api/image/${current.index}?v=${Date.now()}`;
     const loader = new Image();
-    loader.onload = () => { if (token === imageToken) { image.src = url; image.hidden = false; } };
+    loader.onload = () => {
+      if (token === imageToken) {
+        image.src = url;
+        image.hidden = false;
+        baseImgW = loader.naturalWidth;
+        baseImgH = loader.naturalHeight;
+        applyZoom();
+      }
+    };
     loader.onerror = () => { if (token === imageToken) image.hidden = true; };
     loader.src = url;
     empty.hidden = true;
     image.alt = current.name;
     if (image.dataset.index !== String(current.index)) {
       image.dataset.index = String(current.index);
+      zoomState.level = 1.0;
+      zoomState.panX = 0;
+      zoomState.panY = 0;
       if (!image.dataset.draggable) {
         image.dataset.draggable = "1";
         makeImageDraggable(image, current.index);
@@ -139,6 +276,8 @@ function renderViewer() {
     imageToken++;
     image.hidden = true;
     image.removeAttribute("src");
+    baseImgW = 0;
+    baseImgH = 0;
     empty.hidden = false;
     const heading = empty.querySelector("h1");
     const text = empty.querySelector("p");
@@ -177,6 +316,9 @@ function renderViewer() {
   }
   const processed = state.total ? state.total - state.pending : 0;
   $("progress-fill").style.width = state.total ? `${(processed / state.total) * 100}%` : "0";
+
+  const zoomToolbar = $("zoom-toolbar");
+  if (zoomToolbar) zoomToolbar.hidden = !state.current || state.config.image_fit === "actual";
 }
 
 function renderFilmstrip() {
@@ -196,7 +338,7 @@ function renderFilmstrip() {
     const label = el("div", "label");
     label.textContent = item.name;
     box.append(img, label);
-    box.title = `${item.name}\nClick to look at it, or drag it onto a category.`;
+    box.title = `${item.name}\nPreview image or drag to a category`;
 
     // Clicking only changes what you are looking at; it decides nothing.
     box.addEventListener("click", async () => {
@@ -340,6 +482,38 @@ document.addEventListener("keydown", (event) => {
 function renderCards() {
   const wrap = $("categories");
   wrap.replaceChildren();
+  const ready = state.setup.ready;
+  $("bottom").hidden = false;
+  $("resize-dock").hidden = !ready;
+  $("layout").classList.toggle("setup-required", !ready);
+  if (!ready) {
+    wrap.style.removeProperty("--card-basis");
+    wrap.style.alignContent = "stretch";
+    const missingRoot = !state.config.output_root && state.categories.some((c) => c.relative);
+    const hint = el("div", "dock-empty");
+    const text = el("span");
+    text.textContent = missingRoot
+      ? "Choose an output folder before sorting."
+      : state.setup.error;
+    const button = el("button", "btn primary small");
+    button.textContent = missingRoot ? "Choose output folder" : "Set up categories";
+    button.title = missingRoot ? "Choose where sorted images will go" : "Configure category folders";
+    button.addEventListener("click", () => {
+      if (missingRoot) {
+        chooseFolder({
+          title: "Output folder",
+          start: env.home,
+          onPick: (picked) => saveSetting({ output_root: picked }),
+        });
+      } else {
+        openCategoryTable();
+      }
+    });
+    hint.append(text, button);
+    wrap.append(hint);
+    updateControls();
+    return;
+  }
 
   const cards = state.categories.map(buildCategoryCard);
   if (state.skipped > 0) cards.push(buildSkippedCard());
@@ -420,7 +594,7 @@ function buildCategoryCard(category) {
 
   const hk = el("span", "hk" + (category.hotkey ? "" : " none"));
   hk.textContent = category.hotkey || "\u2013";
-  hk.title = category.hotkey ? `Press ${category.hotkey}` : "No hotkey assigned";
+  hk.title = category.hotkey ? `Sort into ${category.name} (${category.hotkey})` : "No shortcut assigned";
   head.append(hk);
   card.append(head);
 
@@ -452,8 +626,7 @@ function buildSkippedCard() {
   const card = el("button", "card skipped");
   card.dataset.id = SKIPPED_ID;
   card.dataset.version = `${state.revision}-${state.skipped}`;
-  card.title = "The images you passed over. Click to put them all back in the queue, "
-             + "or drag an image here to skip it. No files are touched.";
+  card.title = "Review skipped images. Drag an image here to skip it.";
 
   const head = el("div", "card-head");
   const name = el("span", "card-name");
@@ -484,10 +657,10 @@ function buildSkippedCard() {
     head.textContent = `Skipped (${state.skipped})`;
     menu.append(head);
     menuItem(menu, "Put them all back",
-             "Return every skipped image to the queue. No files are touched.",
+             "Return all skipped images to the queue",
              async () => render(await post("/api/skipped/review")));
     menuItem(menu, "Put the last one back",
-             "Return the image you skipped most recently",
+             "Return the most recently skipped image",
              async () => {
                const data = await api(`/api/categories/${SKIPPED_ID}/previews?limit=1`);
                const first = data && data.previews && data.previews[0];
@@ -541,8 +714,8 @@ async function fillPreviews() {
       image.loading = "lazy";
       image.alt = preview.name;
       image.title = isSkipped
-        ? `${preview.name} \u2014 click to put this one back in the queue`
-        : (preview.waiting ? `${preview.name} \u2014 waiting` : preview.name);
+        ? `${preview.name}: return to the queue`
+        : (preview.waiting ? `${preview.name}: pending` : preview.name);
       image.src = `/api/categories/${id}/preview/${preview.n}`
                 + `?size=${Math.max(64, tile * 2)}&v=${card.dataset.version}`;
       if (preview.waiting) image.classList.add("waiting");
@@ -569,51 +742,46 @@ function updateControls() {
   const verb = copying ? "Copy" : "Move";
 
   $("btn-undo").disabled = !state.can_undo;
-  $("btn-skip").disabled = !state.current;
+  $("btn-skip").disabled = !state.current || !state.setup.ready;
   $("btn-skip").title =
-    "Leave this image undecided and move on. It goes into the Skipped group "
-    + "so you can come back to it."
+    "Skip this image for now"
     + (state.config.skip_hotkey ? ` (${state.config.skip_hotkey})` : "");
   $("btn-apply").hidden = !waiting;
+  $("btn-apply").disabled = !state.setup.ready;
   $("btn-discard").hidden = !waiting;
 
   // The buttons stay short; the count and the consequence live in the tooltip.
   const files = `${waiting} image${waiting === 1 ? "" : "s"}`;
   const one = waiting === 1;
   $("btn-apply").title = waiting
-    ? `${verb} ${files} `
-      + (one ? "and its sidecar files into its category folder now. "
-             : "and their sidecar files into their category folders now. ")
-      + "Nothing has been written to disk yet."
+    ? `${verb} ${files} to their assigned categories (Ctrl+Enter)`
     : "";
   $("btn-discard").title = waiting
-    ? `Forget the ${waiting} waiting decision${one ? "" : "s"} and put `
-      + (one ? "that image" : "those images") + " back in the queue. "
-      + "No files are moved, copied or deleted."
+    ? `Cancel ${waiting} pending assignment${one ? "" : "s"} and return the images to the queue`
     : "";
 
-  const note = $("control-note");
-  note.replaceChildren();
-  if (waiting) {
-    note.append(document.createTextNode("Nothing written to disk yet \u2014 "));
-    const bold = el("b");
-    bold.textContent = `${files} waiting`;
-    note.append(bold, document.createTextNode(
-      `. Apply to ${verb.toLowerCase()} them.`));
-  } else if (state.config.apply_mode === "deferred") {
-    note.textContent = "Deferred mode: your picks are collected and applied when you say so.";
-  }
 }
 
+let lastStatus = "";
+let lastWarnings = "";
 function renderStatus() {
-  $("status").textContent = state.status || "";
-  $("warnings").textContent = (state.warnings || []).join(" ");
+  const status = state.status || "";
+  const warnings = (state.warnings || []).join(" ");
+  const messages = [];
+  const notifyStatus = status.startsWith("Carried on from last time")
+    || status === "No images found in that folder."
+    || status === "Those images are already in the list.";
+  if (notifyStatus && status !== lastStatus) messages.push(status);
+  if (warnings && warnings !== lastWarnings) messages.push(warnings);
+  lastStatus = status;
+  lastWarnings = warnings;
+  if (messages.length && !state.error) toast(messages.join(" "));
   const label = state.project.source_label;
   $("folder-label").textContent = label || "Image folder…";
   $("btn-folder").classList.toggle("dropped", state.project.dropped);
   $("btn-folder").title = label
-    ? `${label}\nClick to choose a folder instead, or drop one on the window.`
-    : "Choose the folder of images to sort, or drop a folder or some images on the window.";
+    ? `${label}\nChoose another image folder (Ctrl+O)`
+    : "Choose an image folder (Ctrl+O)";
 }
 
 function shorten(path, max) {
@@ -623,6 +791,10 @@ function shorten(path, max) {
 
 /* --------------------------------------------------------------- actions */
 async function sortInto(categoryId) {
+  if (!state.setup.ready) {
+    openCategoryTable();
+    return;
+  }
   flashCard(categoryId);
   render(await post(`/api/sort/${categoryId}`));
 }
@@ -671,19 +843,20 @@ function openAppMenu() {
   openMenu = "app";
 
   menuItem(menu, "Settings…", "Folders, sorting, view and startup options", openSettings);
-  menuItem(menu, "Keyboard shortcuts", "What every key does",
+  menuItem(menu, "Keyboard shortcuts", "View keyboard shortcuts",
            () => openModal("modal-help"));
   menu.append(el("div", "sep"));
   menuItem(menu, state.project.path ? "Save project" : "Save project as…",
-           "Write your folder and categories to a .json file (Ctrl+S)", saveProject);
-  menuItem(menu, "Load project…", "Open a saved .json project (Ctrl+O is the image folder)",
+           "Save the current project (Ctrl+S)", saveProject);
+  menuItem(menu, "Load project…", "Open a saved project",
            loadProject);
   menu.append(el("div", "sep"));
   menuItem(menu, "Clear input", state.total
-             ? "Empty the image list and start again. Your categories, hotkeys and "
-               + "settings stay exactly as they are."
-             : "There is nothing loaded",
-           clearInput, { danger: true, disabled: !state.total });
+             ? "Unload images and cancel pending assignments. Keep categories and settings."
+             : "No images loaded",
+           clearInput, { disabled: !state.total });
+  menuItem(menu, "Clear output", "Return sorted images and cancel pending placements",
+           clearOutput, { disabled: !state.categories.some(category => category.clearable) });
 
   const button = $("btn-menu").getBoundingClientRect();
   menu.hidden = false;
@@ -703,9 +876,9 @@ function openCardMenu(event, category) {
   const item = (label, title, handler, options = {}) =>
     menuItem(menu, label, title, handler, options);
 
-  item("Edit…", "Open the category table with this one selected",
+  item("Edit…", `Edit ${category.name}`,
        () => openCategoryTable(category.id));
-  item("Create its folder", `Create ${category.resolved || category.folder} now`,
+  item("Create its folder", "Create missing category folders",
        async () => {
          render(await post("/api/categories/create-folders"));
          toast("Folders created.");
@@ -716,7 +889,7 @@ function openCardMenu(event, category) {
   const clearable = category.clearable;
   item(`Clear${clearable ? ` (${clearable})` : ""}`,
        clearable
-         ? "Send every image in this category back to the source folder and queue them up again"
+         ? "Return this category's images to their original folders for sorting again"
          : "This category is empty",
        () => clearCategory(category),
        { danger: true, disabled: !clearable });
@@ -736,19 +909,29 @@ async function clearInput() {
     ? "\n\nThe waiting decisions are thrown away — nothing is written to disk.\n"
       + "Files already moved stay where they are."
     : "\n\nFiles already moved stay where they are.";
-  if (!confirm(`Clear the input?\n\n${bits.join("\n")}.${warning}\n\n`
+  if (!await askConfirmation(`Clear the input?\n\n${bits.join("\n")}.${warning}\n\n`
              + "Your categories, hotkeys and settings are kept.")) return;
   render(await post("/api/input/clear"));
   toast("Input cleared.");
 }
 
+async function clearOutput() {
+  const pending = state.categories.reduce((total, category) => total + category.staged_here, 0);
+  const onDisk = state.categories.some(category => category.clearable_on_disk);
+  const parts = [];
+  if (pending) parts.push(`Cancel ${pending} pending placement(s).`);
+  if (onDisk) parts.push("Return moved images to their original folders and remove output copies. Other images in category folders return to the source folder when available. These file changes happen immediately.");
+  if (!await askConfirmation(`Clear all output?\n\n${parts.join("\n")}\n\nImages return to the sorting queue.`)) return;
+  render(await post("/api/output/clear"));
+}
+
 async function clearCategory(category) {
   const onDisk = category.clearable_on_disk;
-  const waiting = category.clearable - onDisk;
+  const waiting = category.staged_here;
   const parts = [];
-  if (onDisk) parts.push(`${onDisk} image(s) in the folder will be moved back to the source folder`);
-  if (waiting) parts.push(`${waiting} waiting decision(s) will be cancelled`);
-  if (!confirm(`Clear "${category.name}"?\n\n${parts.join("\n")}\n\n`
+  if (waiting) parts.push(`Cancel ${waiting} pending decision(s). These files have not been moved or copied.`);
+  if (onDisk) parts.push(`${onDisk} image(s) already exist in the category folder. Clearing undoes applied moves or copies and returns other files to the source folder. This happens immediately, including when Apply is manual.`);
+  if (!await askConfirmation(`Clear "${category.name}"?\n\n${parts.join("\n")}\n\n`
              + "Those images go back into the queue so you can decide again.")) return;
   render(await post(`/api/categories/${category.id}/clear`));
 }
@@ -756,6 +939,7 @@ async function clearCategory(category) {
 /* ---------------------------------------------------------------- modals */
 let activeModal = null;
 const modalStack = [];
+let finishConfirmation = null;
 
 function openModal(id) {
   if (id === "modal-help") {
@@ -776,6 +960,10 @@ function openModal(id) {
 }
 
 function closeModal() {
+  if (activeModal === "modal-confirm") {
+    finishConfirmation(false);
+    return;
+  }
   if (activeModal) $(activeModal).hidden = true;
   activeModal = null;
   $("modal-backdrop").hidden = true;
@@ -789,6 +977,36 @@ document.querySelectorAll("[data-close]").forEach((node) =>
 
 $("modal-backdrop").addEventListener("mousedown", (event) => {
   if (event.target === $("modal-backdrop")) closeModal();
+});
+
+function askConfirmation(message) {
+  return new Promise((resolve) => {
+    const previousModal = activeModal;
+    const previousFocus = document.activeElement;
+    const [title, ...body] = message.split("\n\n");
+    $("confirm-title").textContent = title;
+    $("confirm-message").textContent = body.join("\n\n");
+    finishConfirmation = (accepted) => {
+      finishConfirmation = null;
+      $("modal-confirm").hidden = true;
+      activeModal = null;
+      if (previousModal) openModal(previousModal);
+      else $("modal-backdrop").hidden = true;
+      if (previousFocus?.isConnected) previousFocus.focus();
+      resolve(accepted);
+    };
+    openModal("modal-confirm");
+    $("confirm-cancel").focus();
+  });
+}
+
+$("confirm-ok").addEventListener("click", () => finishConfirmation?.(true));
+$("modal-confirm").addEventListener("keydown", (event) => {
+  if (event.key === "Tab") {
+    event.preventDefault();
+    const next = document.activeElement === $("confirm-cancel") ? "confirm-ok" : "confirm-cancel";
+    $(next).focus();
+  }
 });
 
 /** A themed replacement for window.prompt (which native shells may block). */
@@ -1009,7 +1227,6 @@ function renderTableRows(focusId) {
     const folder = el("input");
     folder.type = "text";
     folder.value = row.folder;
-    folder.placeholder = state.config.output_root ? "folder name, or a full path" : "full path";
     folder.addEventListener("input", () => { row.folder = folder.value; });
     const useName = el("button", "mini");
     useName.type = "button";
@@ -1059,7 +1276,7 @@ function renderTableRows(focusId) {
     const del = el("button", "row-del");
     del.type = "button";
     del.textContent = "✕";
-    del.title = "Remove this row";
+    del.title = "Remove category";
     del.addEventListener("click", () => {
       tableRows.splice(index, 1);
       if (!tableRows.length) tableRows.push(blankRow());
@@ -1116,7 +1333,7 @@ $("table-root").addEventListener("change", async () => {
 
 $("table-root-browse").addEventListener("click", () => {
   openBrowser({
-    title: "Output root",
+    title: "Output folder",
     start: $("table-root").value || env.home,
     mode: "folder",
     confirmLabel: "Use this folder",
@@ -1162,6 +1379,10 @@ $("cat-table-save").addEventListener("click", async () => {
   const result = await put("/api/categories", { categories: named });
   if (!result || result.error) return;
   render(result);
+  if (!state.setup.ready) {
+    toast(state.setup.error, true);
+    return;
+  }
   closeModal();
 });
 
@@ -1258,14 +1479,14 @@ $("set-output-root").addEventListener("change", (e) => saveSetting({ output_root
 $("set-root-browse").addEventListener("click", () => {
   if (env.native_dialogs) {
     chooseFolder({
-      title: "Output root",
+      title: "Output folder",
       start: $("set-output-root").value || env.home,
       onPick: async (picked) => { await saveSetting({ output_root: picked }); openSettings(); },
     });
     return;
   }
   openBrowser({
-    title: "Output root",
+    title: "Output folder",
     start: $("set-output-root").value || env.home,
     mode: "folder",
     confirmLabel: "Use this folder",
@@ -1354,6 +1575,71 @@ function chooseImageFolder() {
 $("btn-folder").addEventListener("click", chooseImageFolder);
 $("btn-folder-empty").addEventListener("click", chooseImageFolder);
 
+/* --------------------------------------------- zoom toolbar */
+$("btn-zoom-in").addEventListener("click", () => {
+  if (state.current && state.config.image_fit !== "actual") zoomIn();
+});
+$("btn-zoom-out").addEventListener("click", () => {
+  if (state.current && state.config.image_fit !== "actual") zoomOut();
+});
+$("zoom-level").addEventListener("click", zoomReset);
+
+/* --------------------------------------------- wheel zoom */
+$("viewer").addEventListener("wheel", (event) => {
+  if (!state || !state.current) return;
+  if (state.config.image_fit === "actual") return;
+  if (event.deltaY === 0) return;
+  event.preventDefault();
+  changeZoom(event.deltaY < 0 ? 1 : -1);
+}, { passive: false });
+
+/* --------------------------------------------- pan when zoomed */
+$("viewer").addEventListener("pointerdown", (event) => {
+  if (!zoomIsPanning && !$("viewer").classList.contains("zoomed")) return;
+  if (event.button !== 1) return;
+  if (event.target.closest(".zoom-toolbar")) return;
+  zoomIsPanning = true;
+  zoomPanStart = { x: event.clientX, y: event.clientY };
+  const img = $("main-image");
+  if (img) img.classList.add("panning");
+  event.preventDefault();
+});
+
+document.addEventListener("pointermove", (event) => {
+  if (!zoomIsPanning) return;
+  event.preventDefault();
+  const dx = event.clientX - zoomPanStart.x;
+  const dy = event.clientY - zoomPanStart.y;
+  zoomState.panX += dx;
+  zoomState.panY += dy;
+  zoomPanStart = { x: event.clientX, y: event.clientY };
+  applyZoom();
+});
+
+document.addEventListener("pointerup", () => {
+  if (zoomIsPanning) {
+    zoomIsPanning = false;
+    const img = $("main-image");
+    if (img) img.classList.remove("panning");
+  }
+});
+
+document.addEventListener("pointercancel", () => {
+  if (zoomIsPanning) {
+    zoomIsPanning = false;
+    const img = $("main-image");
+    if (img) img.classList.remove("panning");
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && zoomIsPanning) {
+    zoomIsPanning = false;
+    const img = $("main-image");
+    if (img) img.classList.remove("panning");
+  }
+});
+
 function loadProject() {
   openBrowser({
     title: "Load project (.json)",
@@ -1393,12 +1679,14 @@ $("btn-skip").addEventListener("click", async () => render(await post("/api/skip
 $("btn-undo").addEventListener("click", async () => render(await post("/api/undo")));
 $("btn-apply").addEventListener("click", async () => render(await post("/api/apply")));
 $("btn-discard").addEventListener("click", async () => {
-  if (!confirm(`Throw away ${state.staged} waiting change(s)? The images go back in the queue.`)) return;
+  if (!await askConfirmation(`Throw away ${state.staged} waiting change(s)?\n\nThe images go back in the queue.`)) return;
   render(await post("/api/staged/discard"));
 });
 
 /* -------------------------------------------------------- global hotkeys */
 document.addEventListener("keydown", async (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c"
+      && window.getSelection()?.toString()) return;
   // Hotkey capture wins over everything else.
   if (capturingInput) {
     const hotkey = hotkeyFromEvent(event);
@@ -1442,6 +1730,7 @@ document.addEventListener("keydown", async (event) => {
   }
   if (ctrl && event.key === "Enter" && state.staged) {
     event.preventDefault();
+    if (!state.setup.ready) { openCategoryTable(); return; }
     render(await post("/api/apply"));
     return;
   }
@@ -1457,11 +1746,30 @@ document.addEventListener("keydown", async (event) => {
 
   if (matchesHotkey(event, state.config.skip_hotkey)) {
     event.preventDefault();
+    if (!state.setup.ready) { openCategoryTable(); return; }
     render(await post("/api/skip"));
     return;
   }
 
   if (event.ctrlKey || event.altKey || event.metaKey) return;
+
+  if (state.current && state.config.image_fit !== "actual") {
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      zoomIn();
+      return;
+    }
+    if (event.key === "-") {
+      event.preventDefault();
+      zoomOut();
+      return;
+    }
+    if (event.key === "0") {
+      event.preventDefault();
+      zoomReset();
+      return;
+    }
+  }
 
   if (event.key === "ArrowLeft" || event.key === "Backspace") {
     event.preventDefault();
@@ -1504,8 +1812,19 @@ document.addEventListener("drop", async (event) => {
   showDropOverlay(false);
   if (!event.dataTransfer) return;
   event.preventDefault();
+  if (window.trimageNativeDrop && isFolderDrag(event)) return;
   await handleFolderDrop(event.dataTransfer);
 });
+
+async function handleNativeDrop(items) {
+  dropDepth = 0;
+  showDropOverlay(false);
+  for (const item of items.filter((item) => item.directory)) {
+    await loadDroppedFolder(item.path);
+  }
+  const paths = items.filter((item) => !item.directory).map((item) => item.path);
+  if (paths.length) await loadDroppedImages(paths, []);
+}
 
 async function handleFolderDrop(transfer) {
   // A path dragged as text (from an address bar, say) is the easy case.
@@ -1593,6 +1912,10 @@ async function handleImageDrop(entries, transfer) {
     return;
   }
 
+  await loadDroppedImages(paths, missing);
+}
+
+async function loadDroppedImages(paths, missing) {
   // Dropping while something is already loaded adds to the list rather than
   // replacing it; the folder button is how you start over.
   const adding = state.total > 0;

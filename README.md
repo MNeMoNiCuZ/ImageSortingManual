@@ -50,6 +50,10 @@ On Windows, `venv_create.bat` creates a `venv` and installs `requirements.txt` i
 | `Ctrl`+`O` | choose image folder |
 | `Ctrl`+`E` | edit categories |
 | `Ctrl`+`Enter` | apply pending changes |
+| `+` / `-` | zoom in / out |
+| `0` | reset zoom |
+| Scroll wheel | zoom in/out in 10% steps (10% minimum), preserving position within the viewer |
+| Middle-click drag | pan when zoomed in |
 | `?` | shortcut list |
 | `Esc` | close a dialog |
 
