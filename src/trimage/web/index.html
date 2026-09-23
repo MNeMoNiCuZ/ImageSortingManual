@@ -59,6 +59,12 @@
   <section class="stage">
     <div class="viewer" id="viewer">
       <img id="main-image" alt="" hidden>
+      <div class="zoom-toolbar" id="zoom-toolbar" hidden>
+        <button id="btn-zoom-out" class="btn zoom-btn" title="Zoom out (−)">−</button>
+        <button id="btn-zoom-reset" class="btn zoom-btn" title="Reset zoom">↩</button>
+        <button id="btn-zoom-in" class="btn zoom-btn" title="Zoom in (+)">+</button>
+        <span id="zoom-level" class="zoom-level">100%</span>
+      </div>
       <div class="empty" id="empty-state">
         <h1>Nothing loaded</h1>
         <p>Choose an image folder to start sorting.</p>
@@ -77,6 +83,7 @@
       <div class="info-right">
         <span id="info-dims"></span>
         <span id="info-size"></span>
+        <span id="info-zoom" class="zoom-info" hidden></span>
         <span id="info-counts" class="counts"></span>
         <span id="info-progress" class="progress-text"></span>
       </div>
@@ -262,6 +269,8 @@
       <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Choose image folder</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Edit categories</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Apply the waiting changes (deferred mode)</td></tr>
+      <tr><td><kbd>Scroll</kbd></td><td>Zoom in/out centered on cursor</td></tr>
+      <tr><td><kbd>Drag</kbd></td><td>Pan the image when zoomed in</td></tr>
       <tr><td><kbd>?</kbd></td><td>This list</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Close a dialog</td></tr>
     </table>

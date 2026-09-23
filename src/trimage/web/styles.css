@@ -278,6 +278,76 @@ body.resizing { cursor: inherit; user-select: none; }
 .viewer.fit-actual { overflow: auto; align-items: flex-start; justify-content: flex-start; }
 .viewer.fit-actual img { max-width: none; max-height: none; }
 
+/* --------------------------------------------- zoom / pan overlay */
+.zoom-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+  background: rgba(18, 20, 26, .85);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px 4px;
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+.zoom-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  user-select: none;
+}
+.zoom-btn:hover { background: #2c3141; color: var(--text); }
+.zoom-btn:active { background: #232838; }
+.zoom-level {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  min-width: 40px;
+  text-align: center;
+  user-select: none;
+}
+.zoom-info {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  min-width: 40px;
+  text-align: center;
+  user-select: none;
+}
+
+/* Zoomed image state: absolute positioning with transform for pan/zoom */
+.viewer.zoomed {
+  cursor: grab;
+}
+.viewer.zoomed img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  max-height: none;
+  cursor: grab;
+  transform-origin: 0 0;
+  transition: none;
+}
+.viewer.zoomed img.panning {
+  cursor: grabbing;
+}
+
 .empty { text-align: center; color: var(--muted); }
 .empty h1 { font-size: 20px; color: var(--text); margin: 0 0 6px; }
 .empty p { margin: 0 0 16px; }

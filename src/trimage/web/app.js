@@ -12,6 +12,135 @@ let env = { platform: "", home: "", sort_orders: [], image_fits: [],
 const ASPECTS = { vertical: 9 / 16, horizontal: 16 / 9, square: 1 };
 let imageToken = 0;
 
+/* =============================================== zoom / pan state */
+const zoomState = {
+  level: 1.0,
+  panX: 0,
+  panY: 0,
+};
+let baseImgW = 0;
+let baseImgH = 0;
+const ZOOM_MIN = 0.10;
+const ZOOM_MAX = 10.0;
+const ZOOM_STEP = 0.15;
+let zoomIsPanning = false;
+let zoomPanStart = { x: 0, y: 0 };
+
+function zoomReset() {
+  zoomState.level = 1.0;
+  zoomState.panX = 0;
+  zoomState.panY = 0;
+  applyZoom();
+}
+
+function zoomIn() {
+  zoomState.level = Math.min(ZOOM_MAX, Math.round((zoomState.level + ZOOM_STEP) * 100) / 100);
+  applyZoom();
+}
+
+function zoomOut() {
+  zoomState.level = Math.max(ZOOM_MIN, Math.round((zoomState.level - ZOOM_STEP) * 100) / 100);
+  applyZoom();
+}
+
+function applyZoom() {
+  requestAnimationFrame(() => {
+    if (!baseImgW || !baseImgH) return;
+    const img = $("main-image");
+    if (!img || img.hidden) return;
+    const viewer = $("viewer");
+    const vw = viewer.clientWidth;
+    const vh = viewer.clientHeight;
+    if (vw <= 0 || vh <= 0) return;
+    const z = zoomState.level;
+
+    if (z <= 1.0 && zoomState.panX === 0 && zoomState.panY === 0) {
+      viewer.classList.remove("zoomed");
+      img.style.position = "";
+      img.style.left = "";
+      img.style.top = "";
+      img.style.transform = "";
+      img.style.transformOrigin = "";
+      img.style.maxWidth = "";
+      img.style.maxHeight = "";
+      img.style.width = "";
+      img.style.height = "";
+      img.style.objectFit = "";
+      img.style.cursor = "";
+      img.style.transition = "";
+      updateZoomUI();
+      return;
+    }
+
+    viewer.classList.add("zoomed");
+    img.style.maxWidth = "none";
+    img.style.maxHeight = "none";
+    img.style.width = "";
+    img.style.height = "";
+    img.style.objectFit = "";
+    img.style.position = "absolute";
+    img.style.left = "0";
+    img.style.top = "0";
+    img.style.transition = "none";
+    img.style.cursor = zoomIsPanning ? "grabbing" : "grab";
+
+    const imgW = Math.round(baseImgW * z);
+    const imgH = Math.round(baseImgH * z);
+    const tx = Math.round((vw - imgW) / 2 + zoomState.panX);
+    const ty = Math.round((vh - imgH) / 2 + zoomState.panY);
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${z})`;
+    img.style.transformOrigin = "0 0";
+
+    updateZoomUI();
+  });
+}
+
+function updateZoomUI() {
+  const pct = Math.round(zoomState.level * 100);
+  const levelEl = $("zoom-level");
+  const infoEl = $("info-zoom");
+  if (levelEl) {
+    levelEl.textContent = pct + "%";
+    levelEl.hidden = zoomState.level <= 1.0 && zoomState.panX === 0 && zoomState.panY === 0;
+  }
+  if (infoEl) {
+    infoEl.textContent = pct + "%";
+    infoEl.hidden = zoomState.level <= 1.0 && zoomState.panX === 0 && zoomState.panY === 0;
+  }
+}
+
+function zoomToPixel(x, y, up) {
+  if (!baseImgW || !baseImgH) return;
+  const viewer = $("viewer");
+  const vw = viewer.clientWidth;
+  const vh = viewer.clientHeight;
+  if (vw <= 0 || vh <= 0) return;
+  const z = zoomState.level;
+  const step = up ? ZOOM_STEP : -ZOOM_STEP;
+  const newLevel = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((z + step) * 100) / 100));
+  const imgW = Math.round(baseImgW * newLevel);
+  const imgH = Math.round(baseImgH * newLevel);
+  const newCX = (vw - imgW) / 2;
+  const newCY = (vh - imgH) / 2;
+
+  const oldImgW = Math.round(baseImgW * z);
+  const oldImgH = Math.round(baseImgH * z);
+  const cx = (vw - oldImgW) / 2 + zoomState.panX;
+  const cy = (vh - oldImgH) / 2 + zoomState.panY;
+  const relX = (x - cx) / oldImgW;
+  const relY = (y - cy) / oldImgH;
+
+  zoomState.level = newLevel;
+  if (newLevel <= 1.0) {
+    zoomState.panX = 0;
+    zoomState.panY = 0;
+  } else {
+    zoomState.panX = x - newCX - relX * imgW;
+    zoomState.panY = y - newCY - relY * imgH;
+  }
+  applyZoom();
+}
+
 async function api(path, options) {
   const res = await fetch(path, options);
   let data = null;
@@ -98,8 +227,12 @@ function applyConfigToChrome() {
   $("layout").classList.toggle("no-strip", !config.show_filmstrip);
   $("layout").classList.toggle("full-strip", config.full_height_strip);
   const viewer = $("viewer");
+  const wasZoomed = viewer.classList.contains("zoomed");
   viewer.classList.toggle("fit-cover", config.image_fit === "cover");
   viewer.classList.toggle("fit-actual", config.image_fit === "actual");
+  if (config.image_fit === "actual" && wasZoomed) {
+    zoomReset();
+  }
 }
 
 function renderViewer() {
@@ -111,13 +244,24 @@ function renderViewer() {
     const token = ++imageToken;
     const url = `/api/image/${current.index}?v=${Date.now()}`;
     const loader = new Image();
-    loader.onload = () => { if (token === imageToken) { image.src = url; image.hidden = false; } };
+    loader.onload = () => {
+      if (token === imageToken) {
+        image.src = url;
+        image.hidden = false;
+        baseImgW = loader.naturalWidth;
+        baseImgH = loader.naturalHeight;
+        applyZoom();
+      }
+    };
     loader.onerror = () => { if (token === imageToken) image.hidden = true; };
     loader.src = url;
     empty.hidden = true;
     image.alt = current.name;
     if (image.dataset.index !== String(current.index)) {
       image.dataset.index = String(current.index);
+      zoomState.level = 1.0;
+      zoomState.panX = 0;
+      zoomState.panY = 0;
       if (!image.dataset.draggable) {
         image.dataset.draggable = "1";
         makeImageDraggable(image, current.index);
@@ -139,6 +283,8 @@ function renderViewer() {
     imageToken++;
     image.hidden = true;
     image.removeAttribute("src");
+    baseImgW = 0;
+    baseImgH = 0;
     empty.hidden = false;
     const heading = empty.querySelector("h1");
     const text = empty.querySelector("p");
@@ -177,6 +323,9 @@ function renderViewer() {
   }
   const processed = state.total ? state.total - state.pending : 0;
   $("progress-fill").style.width = state.total ? `${(processed / state.total) * 100}%` : "0";
+
+  const zoomToolbar = $("zoom-toolbar");
+  if (zoomToolbar) zoomToolbar.hidden = !state.current;
 }
 
 function renderFilmstrip() {
@@ -1353,6 +1502,85 @@ function chooseImageFolder() {
 
 $("btn-folder").addEventListener("click", chooseImageFolder);
 $("btn-folder-empty").addEventListener("click", chooseImageFolder);
+
+/* --------------------------------------------- zoom toolbar */
+$("btn-zoom-in").addEventListener("click", () => {
+  if (state.config.image_fit !== "actual") zoomIn();
+});
+$("btn-zoom-out").addEventListener("click", () => {
+  if (state.config.image_fit !== "actual") zoomOut();
+});
+$("btn-zoom-reset").addEventListener("click", zoomReset);
+
+/* --------------------------------------------- wheel zoom */
+$("viewer").addEventListener("wheel", (event) => {
+  if (!state || !state.current) return;
+  if (state.config.image_fit === "actual") return;
+  if (event.deltaY === 0) return;
+  event.preventDefault();
+  const rect = $("viewer").getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  zoomToPixel(x, y, event.deltaY < 0);
+}, { passive: false });
+
+/* --------------------------------------------- pan when zoomed */
+$("viewer").addEventListener("pointerdown", (event) => {
+  if (!zoomIsPanning && !$("viewer").classList.contains("zoomed")) return;
+  if (event.button !== 1) return;
+  if (event.target.closest(".zoom-toolbar")) return;
+  zoomIsPanning = true;
+  zoomPanStart = { x: event.clientX, y: event.clientY };
+  const img = $("main-image");
+  if (img) img.classList.add("panning");
+  event.preventDefault();
+});
+
+document.addEventListener("pointermove", (event) => {
+  if (!zoomIsPanning) return;
+  event.preventDefault();
+  const dx = event.clientX - zoomPanStart.x;
+  const dy = event.clientY - zoomPanStart.y;
+  zoomState.panX += dx;
+  zoomState.panY += dy;
+  zoomPanStart = { x: event.clientX, y: event.clientY };
+  applyZoom();
+});
+
+document.addEventListener("pointerup", () => {
+  if (zoomIsPanning) {
+    zoomIsPanning = false;
+    const img = $("main-image");
+    if (img) img.classList.remove("panning");
+  }
+});
+
+document.addEventListener("pointercancel", () => {
+  if (zoomIsPanning) {
+    zoomIsPanning = false;
+    const img = $("main-image");
+    if (img) img.classList.remove("panning");
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && zoomIsPanning) {
+    zoomIsPanning = false;
+    const img = $("main-image");
+    if (img) img.classList.remove("panning");
+  }
+  if (event.ctrlKey || event.altKey || event.metaKey) return;
+  if (event.key === "+" || event.key === "=") {
+    event.preventDefault();
+    zoomIn();
+  } else if (event.key === "-") {
+    event.preventDefault();
+    zoomOut();
+  } else if (event.key === "0") {
+    event.preventDefault();
+    zoomReset();
+  }
+});
 
 function loadProject() {
   openBrowser({

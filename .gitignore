@@ -174,3 +174,7 @@ config.json
 # Built executable and local venv helper
 Trimage.exe
 venv_activate.bat
+
+# Logs
+logs/
+AGENTS.md
