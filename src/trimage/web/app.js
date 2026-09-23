@@ -20,7 +20,7 @@ const zoomState = {
 };
 let baseImgW = 0;
 let baseImgH = 0;
-const ZOOM_MIN = 1.0;
+const ZOOM_MIN = 0.10;
 const ZOOM_MAX = 10.0;
 const ZOOM_STEP = 0.15;
 let zoomIsPanning = false;
@@ -40,20 +40,7 @@ function zoomIn() {
 
 function zoomOut() {
   zoomState.level = Math.max(ZOOM_MIN, Math.round((zoomState.level - ZOOM_STEP) * 100) / 100);
-  if (zoomState.level === 1.0) {
-    zoomState.panX = 0;
-    zoomState.panY = 0;
-  }
   applyZoom();
-}
-
-function zoomBaseSize(viewer) {
-  const style = getComputedStyle(viewer);
-  const width = viewer.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-  const height = viewer.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-  if (viewer.classList.contains("fit-cover")) return { width, height };
-  const scale = Math.min(1, width / baseImgW, height / baseImgH);
-  return { width: baseImgW * scale, height: baseImgH * scale };
 }
 
 function applyZoom() {
@@ -66,8 +53,6 @@ function applyZoom() {
     const vh = viewer.clientHeight;
     if (vw <= 0 || vh <= 0) return;
     const z = zoomState.level;
-    const base = zoomBaseSize(viewer);
-    if (base.width <= 0 || base.height <= 0) return;
 
     if (z <= 1.0 && zoomState.panX === 0 && zoomState.panY === 0) {
       viewer.classList.remove("zoomed");
@@ -90,16 +75,17 @@ function applyZoom() {
     viewer.classList.add("zoomed");
     img.style.maxWidth = "none";
     img.style.maxHeight = "none";
-    img.style.width = `${base.width}px`;
-    img.style.height = `${base.height}px`;
+    img.style.width = "";
+    img.style.height = "";
+    img.style.objectFit = "";
     img.style.position = "absolute";
     img.style.left = "0";
     img.style.top = "0";
     img.style.transition = "none";
     img.style.cursor = zoomIsPanning ? "grabbing" : "grab";
 
-    const imgW = base.width * z;
-    const imgH = base.height * z;
+    const imgW = Math.round(baseImgW * z);
+    const imgH = Math.round(baseImgH * z);
     const tx = Math.round((vw - imgW) / 2 + zoomState.panX);
     const ty = Math.round((vh - imgH) / 2 + zoomState.panY);
     img.style.transform = `translate(${tx}px, ${ty}px) scale(${z})`;
@@ -129,18 +115,16 @@ function zoomToPixel(x, y, up) {
   const vw = viewer.clientWidth;
   const vh = viewer.clientHeight;
   if (vw <= 0 || vh <= 0) return;
-  const base = zoomBaseSize(viewer);
-  if (base.width <= 0 || base.height <= 0) return;
   const z = zoomState.level;
   const step = up ? ZOOM_STEP : -ZOOM_STEP;
   const newLevel = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((z + step) * 100) / 100));
-  const imgW = base.width * newLevel;
-  const imgH = base.height * newLevel;
+  const imgW = Math.round(baseImgW * newLevel);
+  const imgH = Math.round(baseImgH * newLevel);
   const newCX = (vw - imgW) / 2;
   const newCY = (vh - imgH) / 2;
 
-  const oldImgW = base.width * z;
-  const oldImgH = base.height * z;
+  const oldImgW = Math.round(baseImgW * z);
+  const oldImgH = Math.round(baseImgH * z);
   const cx = (vw - oldImgW) / 2 + zoomState.panX;
   const cy = (vh - oldImgH) / 2 + zoomState.panY;
   const relX = (x - cx) / oldImgW;
@@ -341,7 +325,7 @@ function renderViewer() {
   $("progress-fill").style.width = state.total ? `${(processed / state.total) * 100}%` : "0";
 
   const zoomToolbar = $("zoom-toolbar");
-  if (zoomToolbar) zoomToolbar.hidden = !state.current || state.config.image_fit === "actual";
+  if (zoomToolbar) zoomToolbar.hidden = !state.current;
 }
 
 function renderFilmstrip() {
@@ -1521,10 +1505,10 @@ $("btn-folder-empty").addEventListener("click", chooseImageFolder);
 
 /* --------------------------------------------- zoom toolbar */
 $("btn-zoom-in").addEventListener("click", () => {
-  if (state.current && state.config.image_fit !== "actual") zoomIn();
+  if (state.config.image_fit !== "actual") zoomIn();
 });
 $("btn-zoom-out").addEventListener("click", () => {
-  if (state.current && state.config.image_fit !== "actual") zoomOut();
+  if (state.config.image_fit !== "actual") zoomOut();
 });
 $("btn-zoom-reset").addEventListener("click", zoomReset);
 
@@ -1584,6 +1568,17 @@ document.addEventListener("keydown", (event) => {
     zoomIsPanning = false;
     const img = $("main-image");
     if (img) img.classList.remove("panning");
+  }
+  if (event.ctrlKey || event.altKey || event.metaKey) return;
+  if (event.key === "+" || event.key === "=") {
+    event.preventDefault();
+    zoomIn();
+  } else if (event.key === "-") {
+    event.preventDefault();
+    zoomOut();
+  } else if (event.key === "0") {
+    event.preventDefault();
+    zoomReset();
   }
 });
 
@@ -1695,24 +1690,6 @@ document.addEventListener("keydown", async (event) => {
   }
 
   if (event.ctrlKey || event.altKey || event.metaKey) return;
-
-  if (state.current && state.config.image_fit !== "actual") {
-    if (event.key === "+" || event.key === "=") {
-      event.preventDefault();
-      zoomIn();
-      return;
-    }
-    if (event.key === "-") {
-      event.preventDefault();
-      zoomOut();
-      return;
-    }
-    if (event.key === "0") {
-      event.preventDefault();
-      zoomReset();
-      return;
-    }
-  }
 
   if (event.key === "ArrowLeft" || event.key === "Backspace") {
     event.preventDefault();
