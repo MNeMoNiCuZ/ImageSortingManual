@@ -12,18 +12,18 @@
 <header class="topbar">
 
   <div class="topbar-left">
-    <button id="btn-manage" class="btn ctrl primary" title="Add, edit and reorder your categories (Ctrl+E)">
+    <button id="btn-manage" class="btn ctrl primary" title="Edit categories (Ctrl+E)">
       <span class="ctrl-glyph">☰</span><span>Categories</span>
     </button>
   </div>
 
   <div class="dock-controls" id="dock-controls">
     <button id="btn-skip" class="btn ctrl"
-            title="Leave this image undecided and move on. It goes into the Skipped group so you can come back to it.">
+            title="Skip this image for now">
       <span>Skip</span><span class="ctrl-glyph">▶</span>
     </button>
     <button id="btn-undo" class="btn ctrl warn" disabled
-            title="Take back the last thing you did — a move, a copy or a skip (Ctrl+Z). Files that were moved are moved back.">
+            title="Undo the last move, copy or skip (Ctrl+Z)">
       <span class="ctrl-glyph">↶</span><span>Undo</span>
     </button>
     <button id="btn-discard" class="btn ctrl danger" hidden>
@@ -35,7 +35,7 @@
   </div>
 
   <div class="topbar-right">
-    <button id="btn-folder" class="btn path" title="Choose the folder of images to sort">
+    <button id="btn-folder" class="btn path" title="Choose an image folder (Ctrl+O)">
       <svg class="path-glyph" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.4h7A1.5 1.5 0 0 1 19 9.9v7.6a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 17.5Z"/>
       </svg>
@@ -53,18 +53,12 @@
 <main class="app" id="layout">
 
   <aside class="filmstrip" id="filmstrip" aria-label="Upcoming images"></aside>
-  <div class="resizer-v" id="resize-strip" title="Drag to resize the strip"
+  <div class="resizer-v" id="resize-strip" title="Resize the image strip"
        role="separator" aria-orientation="vertical" tabindex="0"></div>
 
   <section class="stage">
     <div class="viewer" id="viewer">
       <img id="main-image" alt="" hidden>
-      <div class="zoom-toolbar" id="zoom-toolbar" hidden>
-        <button id="btn-zoom-out" class="btn zoom-btn" title="Zoom out (−)">−</button>
-        <button id="btn-zoom-reset" class="btn zoom-btn" title="Reset zoom">↩</button>
-        <button id="btn-zoom-in" class="btn zoom-btn" title="Zoom in (+)">+</button>
-        <span id="zoom-level" class="zoom-level">100%</span>
-      </div>
       <div class="empty" id="empty-state">
         <h1>Nothing loaded</h1>
         <p>Choose an image folder to start sorting.</p>
@@ -81,9 +75,13 @@
         <span id="info-sidecars" class="chips"></span>
       </div>
       <div class="info-right">
+        <div class="zoom-toolbar" id="zoom-toolbar" hidden>
+          <button id="btn-zoom-out" class="btn zoom-btn" title="Zoom out (−)">−</button>
+          <button id="zoom-level" class="btn zoom-btn zoom-level" title="Click to reset zoom to 100% (0)">100%</button>
+          <button id="btn-zoom-in" class="btn zoom-btn" title="Zoom in (+)">+</button>
+        </div>
         <span id="info-dims"></span>
         <span id="info-size"></span>
-        <span id="info-zoom" class="zoom-info" hidden></span>
         <span id="info-counts" class="counts"></span>
         <span id="info-progress" class="progress-text"></span>
       </div>
@@ -92,7 +90,7 @@
   </section>
 
   <section class="bottom" id="bottom">
-    <div class="resizer-h" id="resize-dock" title="Drag to resize the category area"
+    <div class="resizer-h" id="resize-dock" title="Resize the category area"
          role="separator" aria-orientation="horizontal" tabindex="0"></div>
     <footer class="dock">
       <div class="categories" id="categories"></div>
@@ -101,21 +99,14 @@
 
 </main>
 
-<div class="statusbar">
-  <span id="status">Ready.</span>
-  <span id="control-note" class="control-note"></span>
-  <span id="warnings" class="warning"></span>
-</div>
-
 <!-- ------------------------------------------------------------------ -->
 <div class="modal-backdrop" id="modal-backdrop" hidden>
 
   <div class="modal browse" id="modal-browse" hidden>
     <h2 id="browse-title">Select folder</h2>
     <div class="path-row">
-      <button class="btn ghost" id="browse-up" title="Go to the parent folder">↑ Up</button>
-      <input type="text" id="browse-path" class="path-input" spellcheck="false"
-             placeholder="Type or paste a folder path">
+      <button class="btn ghost" id="browse-up" title="Open the parent folder">↑ Up</button>
+      <input type="text" id="browse-path" class="path-input" spellcheck="false">
       <button class="btn ghost" id="browse-go">Go</button>
     </div>
     <div class="drives" id="browse-drives"></div>
@@ -144,9 +135,8 @@
     </div>
 
     <div class="root-bar">
-      <label class="inline-label grow">Output root
-        <input type="text" id="table-root" spellcheck="false"
-               placeholder="Set this and categories can use plain folder names">
+      <label class="inline-label grow">Output folder
+        <input type="text" id="table-root" spellcheck="false">
       </label>
       <button class="btn ghost small" id="table-root-browse">Browse…</button>
     </div>
@@ -195,9 +185,9 @@
     <h2>Settings</h2>
 
     <h3>Folders</h3>
-    <label>Output root — categories with a plain folder name are created in here
+    <label>Output folder
       <span class="inline">
-        <input type="text" id="set-output-root" spellcheck="false" placeholder="D:\sorted">
+        <input type="text" id="set-output-root" spellcheck="false" title="Default folder for sorted images">
         <button class="btn ghost small" id="set-root-browse">Browse…</button>
       </span>
     </label>
@@ -209,10 +199,10 @@
     </label>
 
     <h3>Sorting</h3>
-    <label>What to do with the files
+    <label>File action
       <select id="set-file-action"></select>
     </label>
-    <label>When to do it
+    <label>Apply changes
       <select id="set-apply-mode"></select>
     </label>
     <p class="hint" id="apply-mode-hint"></p>
@@ -222,32 +212,32 @@
         <button class="btn ghost small" id="set-skip-hotkey-clear">Clear</button>
       </span>
     </label>
-    <label class="check"><input type="checkbox" id="set-sidecars"> Take sidecar files along (.txt, .caption, …)</label>
-    <label>Only these sidecar extensions — blank means all
-      <input type="text" id="set-sidecar-ext" spellcheck="false" placeholder="txt, caption, json">
+    <label class="check"><input type="checkbox" id="set-sidecars" title="Include matching caption and metadata files"> Include sidecar files</label>
+    <label>Sidecar extensions
+      <input type="text" id="set-sidecar-ext" spellcheck="false" placeholder="txt, caption, json" title="File extensions to include. Leave blank to include all sidecar files.">
     </label>
 
     <h3>View</h3>
-    <label class="check"><input type="checkbox" id="set-filmstrip"> Show the upcoming-images strip</label>
-    <label class="check"><input type="checkbox" id="set-full-strip"> Run the strip down the full height of the window</label>
+    <label class="check"><input type="checkbox" id="set-filmstrip"> Show image strip</label>
+    <label class="check"><input type="checkbox" id="set-full-strip"> Full-height image strip</label>
     <label>Thumbnail shape
       <select id="set-thumb-ratio"></select>
     </label>
     <label>Category cards
       <select id="set-card-layout"></select>
     </label>
-    <label class="check"><input type="checkbox" id="set-card-thumbs"> Show image previews on the category cards</label>
-    <label>Preview size on cards <span class="value" id="set-card-thumb-size-value"></span>
+    <label class="check"><input type="checkbox" id="set-card-thumbs"> Show category previews</label>
+    <label>Category preview size <span class="value" id="set-card-thumb-size-value"></span>
       <input type="range" id="set-card-thumb-size" min="32" max="140" step="4">
     </label>
-    <label class="check"><input type="checkbox" id="set-card-counts"> Show the image count on each category card</label>
+    <label class="check"><input type="checkbox" id="set-card-counts"> Show category image counts</label>
     <p class="hint">Drag the edge of the strip or of the category area to resize them.</p>
     <label>Image sizing
       <select id="set-image-fit"></select>
     </label>
 
     <h3>Startup</h3>
-    <label class="check"><input type="checkbox" id="set-autosave"> Save my categories as I go, and offer them next time</label>
+    <label class="check"><input type="checkbox" id="set-autosave" title="Save category changes automatically"> Save categories automatically</label>
     <label class="check"><input type="checkbox" id="set-remember"> Remember the last project</label>
 
     <p class="hint">Saved automatically to <code id="set-config-path"></code></p>
@@ -269,8 +259,10 @@
       <tr><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>Choose image folder</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Edit categories</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Apply the waiting changes (deferred mode)</td></tr>
-      <tr><td><kbd>Scroll</kbd></td><td>Zoom in/out centered on cursor</td></tr>
-      <tr><td><kbd>Drag</kbd></td><td>Pan the image when zoomed in</td></tr>
+      <tr><td><kbd>Scroll</kbd></td><td>Zoom in/out in 10% steps</td></tr>
+      <tr><td><kbd>+</kbd> / <kbd>−</kbd></td><td>Zoom in / out</td></tr>
+      <tr><td><kbd>0</kbd></td><td>Reset zoom</td></tr>
+      <tr><td>Middle-click drag</td><td>Pan the image when zoomed in</td></tr>
       <tr><td><kbd>?</kbd></td><td>This list</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Close a dialog</td></tr>
     </table>
@@ -289,6 +281,16 @@
       <span class="spacer"></span>
       <button class="btn ghost" id="resume-no">Start fresh</button>
       <button class="btn primary" id="resume-yes">Use it</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" hidden>
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-message"></p>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button class="btn ghost" id="confirm-cancel" title="Cancel" data-close>Cancel</button>
+      <button class="btn primary" id="confirm-ok" title="Confirm">OK</button>
     </div>
   </div>
 
@@ -313,7 +315,7 @@
   </div>
 </div>
 
-<div class="toast" id="toast" hidden></div>
+<div class="toast" id="toast" role="status" tabindex="0" title="Select text to copy" hidden></div>
 
 <script src="app.js"></script>
 </body>

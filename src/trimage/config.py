@@ -43,7 +43,7 @@ class AppConfig:
     sort_order: str = "name"
     # sorting behaviour
     file_action: str = "move"        # move | copy
-    apply_mode: str = "immediate"    # immediate | deferred (apply on demand)
+    apply_mode: str = "deferred"     # immediate | deferred (apply on demand)
     move_sidecars: bool = True
     sidecar_extensions: list[str] = field(default_factory=list)  # empty = every extension
     create_folders_upfront: bool = False
@@ -86,7 +86,7 @@ class AppConfig:
         if self.file_action not in FILE_ACTIONS:
             self.file_action = "move"
         if self.apply_mode not in APPLY_MODES:
-            self.apply_mode = "immediate"
+            self.apply_mode = "deferred"
         if self.thumb_ratio not in THUMB_RATIOS:
             self.thumb_ratio = "vertical"
         if self.card_layout not in CARD_LAYOUTS:

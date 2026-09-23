@@ -39,7 +39,7 @@ def library(tmp_path: Path) -> Path:
 @pytest.fixture
 def config(tmp_path: Path) -> AppConfig:
     """A config that writes to the temp dir, never the real config.json."""
-    fresh = AppConfig()
+    fresh = AppConfig(apply_mode="immediate")
     fresh._file = tmp_path / "config.json"
     return fresh
 
@@ -474,7 +474,62 @@ def test_legacy_copy_flag_is_understood(tmp_path: Path):
 def test_bad_action_values_fall_back(tmp_path: Path):
     config = AppConfig(file_action="teleport", apply_mode="whenever").normalise()
     assert config.file_action == "move"
-    assert config.apply_mode == "immediate"
+    assert config.apply_mode == "deferred"
+
+
+def test_manual_apply_is_default(session: Session, tmp_path: Path):
+    session.config = AppConfig.from_dict({})
+    session.config._file = tmp_path / "manual-config.json"
+    category = session.add_category("Keep", str(tmp_path / "keep"))
+    original = session.queue.current
+    session.sort_current(category.id)
+    assert original.exists()
+    assert not (tmp_path / "keep").exists()
+    category_state = session.category_state(category)
+    assert category_state["staged_here"] == 1
+    assert category_state["clearable_on_disk"] == 0
+    assert session.clear_category(category.id) == (0, 1, 0)
+    assert original.exists()
+    assert session.queue.current == original
+
+
+@pytest.mark.parametrize("action", ["move", "copy"])
+def test_clear_output_restores_applied_and_pending_images(session, library, tmp_path, action):
+    session.set_images([str(library / "cat.png"), str(library / "nested" / "dog.jpg"),
+                        str(library / "cat2.png")])
+    session.config.file_action = action
+    first = session.add_category("Keep", str(tmp_path / "keep"))
+    second = session.add_category("Maybe", str(tmp_path / "maybe"))
+    session.sort_current(first.id)
+    session.sort_current(second.id)
+    session.config.apply_mode = "deferred"
+    session.sort_current(second.id)
+    session.clear_output()
+    assert (library / "cat.png").exists()
+    assert (library / "cat.txt").exists()
+    assert (library / "nested" / "dog.jpg").exists()
+    assert (library / "cat2.png").exists()
+    assert not list((tmp_path / "keep").iterdir())
+    assert not list((tmp_path / "maybe").iterdir())
+    assert session.state()["pending"] == 3
+    assert session.state()["staged"] == 0
+    assert len(session.project.categories) == 2
+
+
+def test_api_clear_output_cancels_pending_placements(client, tmp_path):
+    client.post("/api/settings", json={"apply_mode": "deferred"})
+    state = client.post("/api/categories", json={"name": "Keep", "folder": str(tmp_path / "keep")}).json()
+    category = state["categories"][0]
+    client.post(f"/api/sort/{category['id']}")
+    response = client.post("/api/output/clear")
+    assert response.status_code == 200
+    assert response.json()["staged"] == 0
+    assert response.json()["pending"] == 3
+    assert not (tmp_path / "keep").exists()
+
+
+def test_explicit_immediate_apply_is_preserved():
+    assert AppConfig.from_dict({"apply_mode": "immediate"}).apply_mode == "immediate"
 
 
 # -- categories and relative folders --------------------------------------

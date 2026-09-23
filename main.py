@@ -18,7 +18,7 @@ SRC = Path(__file__).resolve().parent / "src"
 if SRC.is_dir():
     sys.path.insert(0, str(SRC))
 
-from trimage import __version__, nativedialog
+from trimage import __version__, nativedialog, nativedrop
 from trimage.server import app, session
 
 APP_ID = "Trimage.Trimage"
@@ -89,6 +89,7 @@ def run_desktop(host: str, port: int) -> bool:
         background_color="#12141a",
     )
     nativedialog.register_window(window)
+    nativedrop.register_window(window)
     webview.start(icon=str(ICON_PATH))
     return True
 
